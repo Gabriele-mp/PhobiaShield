@@ -1,0 +1,101 @@
+# Data Augmentation Configuration
+
+# Augmentation pipeline name
+name: "default"
+
+# Training augmentations
+train:
+  # Geometric transforms
+  horizontal_flip:
+    enabled: true
+    p: 0.5
+  
+  vertical_flip:
+    enabled: false
+    p: 0.0
+  
+  rotation:
+    enabled: true
+    limit: 15  # degrees
+    p: 0.3
+  
+  scale:
+    enabled: true
+    scale_limit: 0.2  # +/- 20%
+    p: 0.3
+  
+  shift:
+    enabled: true
+    shift_limit: 0.1  # +/- 10%
+    p: 0.3
+  
+  # Color augmentations
+  brightness_contrast:
+    enabled: true
+    brightness_limit: 0.2
+    contrast_limit: 0.2
+    p: 0.5
+  
+  hue_saturation:
+    enabled: true
+    hue_shift_limit: 20
+    sat_shift_limit: 30
+    val_shift_limit: 20
+    p: 0.3
+  
+  # Noise and blur
+  gaussian_noise:
+    enabled: true
+    var_limit: [10.0, 50.0]
+    p: 0.2
+  
+  gaussian_blur:
+    enabled: true
+    blur_limit: [3, 7]
+    p: 0.2
+  
+  motion_blur:
+    enabled: true
+    blur_limit: 7
+    p: 0.2
+  
+  # Quality degradation (simulate poor quality images)
+  jpeg_compression:
+    enabled: true
+    quality_lower: 70
+    quality_upper: 100
+    p: 0.3
+  
+  # Cutout / Random Erasing
+  cutout:
+    enabled: false
+    num_holes: 8
+    max_h_size: 8
+    max_w_size: 8
+    p: 0.0
+  
+  # Mixup / Mosaic (advanced, può essere implementato custom)
+  mosaic:
+    enabled: false
+    p: 0.0
+
+# Validation/Test augmentations (minimal or none)
+val:
+  # Only normalization, no augmentation
+  normalize_only: true
+
+test:
+  normalize_only: true
+
+# Advanced augmentation techniques
+advanced:
+  # Copy-paste augmentation for small objects
+  copy_paste:
+    enabled: false
+    p: 0.0
+  
+  # Random crop with bbox adjustment
+  random_crop:
+    enabled: false
+    crop_size: [320, 320]
+    p: 0.0

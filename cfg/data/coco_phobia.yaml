@@ -1,0 +1,66 @@
+# COCO Phobia Subset Dataset Configuration
+
+# Dataset name
+name: "coco_phobia"
+type: "PhobiaDataset"
+
+# Classes (ID mapping)
+classes:
+  - id: 0
+    name: "spider"
+    coco_id: null  # Will be mapped from COCO
+  - id: 1
+    name: "snake"
+    coco_id: null
+  - id: 2
+    name: "blood"
+    coco_id: null  # Not in COCO, will use custom dataset
+
+num_classes: 3
+
+# Paths
+paths:
+  root: "data/"
+  images: "data/raw/images"
+  annotations: "data/annotations"
+  train_annotations: "data/annotations/train.json"
+  val_annotations: "data/annotations/val.json"
+  test_annotations: "data/annotations/test.json"
+
+# Data splits
+splits:
+  train: 0.7
+  val: 0.15
+  test: 0.15
+
+# Image settings
+image:
+  size: [416, 416]  # [H, W] - must match model input_size
+  normalize: true
+  mean: [0.485, 0.456, 0.406]  # ImageNet stats
+  std: [0.229, 0.224, 0.225]
+  format: "RGB"
+
+# Annotation format
+annotation:
+  format: "yolo"  # yolo, coco, pascal_voc
+  # YOLO format: [class, center_x, center_y, width, height] (normalized 0-1)
+
+# Dataloader settings
+dataloader:
+  batch_size: 16
+  num_workers: 4
+  pin_memory: true
+  shuffle_train: true
+  shuffle_val: false
+  drop_last: true  # Drop last incomplete batch in training
+
+# Augmentation (see augmentation.yaml for details)
+augmentation:
+  enabled: true
+  config: "default"
+
+# Cache settings (for faster loading)
+cache:
+  enabled: false  # Set to true after first run
+  cache_images: false  # Cache images in RAM (needs lots of memory!)

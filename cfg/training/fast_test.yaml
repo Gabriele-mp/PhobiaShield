@@ -1,0 +1,79 @@
+# Fast Test Configuration - Quick iterations for debugging
+
+name: "fast_test"
+
+# Quick training
+epochs: 5
+start_epoch: 0
+
+# Optimizer - higher LR for faster convergence in test
+optimizer:
+  type: "adam"
+  lr: 0.01  # Higher LR
+  weight_decay: 0.0001
+  betas: [0.9, 0.999]
+  eps: 1e-8
+
+# No scheduler for fast test
+scheduler:
+  enabled: false
+
+# Smaller batch size for faster iterations
+batch_size: 8
+accumulation_steps: 1
+
+# Disable mixed precision for debugging
+mixed_precision:
+  enabled: false
+
+# Gradient clipping
+gradient_clip:
+  enabled: true
+  max_norm: 10.0
+  norm_type: 2
+
+# Disable early stopping
+early_stopping:
+  enabled: false
+
+# Save every epoch for debugging
+checkpoint:
+  save_every_n_epochs: 1
+  save_top_k: 2
+  monitor: "val_loss"
+  mode: "min"
+  save_last: true
+  save_weights_only: false
+
+# Validate every epoch
+validation:
+  check_every_n_epochs: 1
+  run_before_training: true
+
+# No warmup
+warmup:
+  enabled: false
+
+# Device
+device: "cuda"
+num_workers: 2  # Less workers for faster startup
+pin_memory: true
+persistent_workers: false
+
+# Non-deterministic for speed
+deterministic: false
+benchmark: true
+
+# Debug settings - use subset of data
+debug:
+  enabled: true
+  fast_dev_run: false
+  overfit_batches: 0
+  limit_train_batches: 0.1  # Use only 10% of training data
+  limit_val_batches: 0.2    # Use only 20% of validation data
+
+# Logging
+logging:
+  log_every_n_steps: 5
+  log_images: true
+  num_images_to_log: 2

@@ -1,0 +1,98 @@
+# Tiny-YOLO Simplified Architecture Configuration
+
+# Model name
+name: "tiny_yolo"
+
+# Architecture
+architecture:
+  type: "TinyYOLO"
+  backbone: "custom_cnn"
+  
+  # Input size
+  input_size: [416, 416]  # [H, W]
+  in_channels: 3
+  
+  # Grid configuration
+  grid_size: 13  # 13x13 grid (416/32)
+  num_boxes_per_cell: 2  # B in paper
+  
+  # CNN Layers configuration
+  layers:
+    - filters: 16
+      kernel_size: 3
+      stride: 1
+      padding: 1
+      activation: "leaky_relu"
+      batch_norm: true
+      pool: true
+      
+    - filters: 32
+      kernel_size: 3
+      stride: 1
+      padding: 1
+      activation: "leaky_relu"
+      batch_norm: true
+      pool: true
+      
+    - filters: 64
+      kernel_size: 3
+      stride: 1
+      padding: 1
+      activation: "leaky_relu"
+      batch_norm: true
+      pool: true
+      
+    - filters: 128
+      kernel_size: 3
+      stride: 1
+      padding: 1
+      activation: "leaky_relu"
+      batch_norm: true
+      pool: true
+      
+    - filters: 256
+      kernel_size: 3
+      stride: 1
+      padding: 1
+      activation: "leaky_relu"
+      batch_norm: true
+      pool: true
+      
+    - filters: 512
+      kernel_size: 3
+      stride: 1
+      padding: 1
+      activation: "leaky_relu"
+      batch_norm: true
+      pool: false  # No pool for last layer
+      
+  # LeakyReLU negative slope
+  leaky_relu_slope: 0.1
+  
+  # Dropout (optional)
+  dropout: 0.0
+
+# Output configuration
+output:
+  # Classes: Spider, Snake, Blood
+  num_classes: 3
+  
+  # Output channels per grid cell: B * (5 + C)
+  # 5 = [x, y, w, h, confidence]
+  # C = num_classes
+  # Total: 2 * (5 + 3) = 16 channels per cell
+  
+# Loss weights
+loss:
+  lambda_coord: 5.0      # Weight for localization loss
+  lambda_noobj: 0.5      # Weight for no-object confidence
+  lambda_obj: 1.0        # Weight for object confidence
+  lambda_class: 1.0      # Weight for classification loss
+  
+  # IoU threshold for objectness
+  iou_threshold: 0.5
+
+# Initialization
+init:
+  type: "kaiming"  # kaiming, xavier, normal
+  mode: "fan_out"

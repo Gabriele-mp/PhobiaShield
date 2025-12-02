@@ -1,0 +1,111 @@
+# Default Training Configuration
+
+# Training settings
+name: "default_training"
+
+# Epochs
+epochs: 100
+start_epoch: 0
+
+# Optimizer
+optimizer:
+  type: "adam"  # adam, sgd, adamw
+  lr: 0.001
+  weight_decay: 0.0005
+  betas: [0.9, 0.999]
+  eps: 1e-8
+  
+  # SGD specific (if type=sgd)
+  momentum: 0.9
+  nesterov: true
+
+# Learning rate scheduler
+scheduler:
+  enabled: true
+  type: "step"  # step, cosine, plateau, onecycle
+  
+  # StepLR
+  step_size: 30
+  gamma: 0.1
+  
+  # CosineAnnealingLR
+  T_max: 100
+  eta_min: 1e-6
+  
+  # ReduceLROnPlateau
+  mode: "min"
+  factor: 0.5
+  patience: 10
+  threshold: 0.0001
+  
+  # OneCycleLR
+  max_lr: 0.01
+  pct_start: 0.3
+  anneal_strategy: "cos"
+
+# Batch size
+batch_size: 16
+accumulation_steps: 1  # Gradient accumulation for larger effective batch size
+
+# Mixed precision training
+mixed_precision:
+  enabled: true  # Use AMP (Automatic Mixed Precision) if available
+  dtype: "float16"  # float16, bfloat16
+
+# Gradient clipping
+gradient_clip:
+  enabled: true
+  max_norm: 10.0
+  norm_type: 2
+
+# Early stopping
+early_stopping:
+  enabled: true
+  patience: 20
+  min_delta: 0.001
+  mode: "min"  # min for loss, max for mAP
+  monitor: "val_loss"  # val_loss, val_map
+
+# Checkpointing
+checkpoint:
+  save_every_n_epochs: 5
+  save_top_k: 3
+  monitor: "val_loss"
+  mode: "min"
+  save_last: true
+  save_weights_only: false
+
+# Validation
+validation:
+  check_every_n_epochs: 1
+  run_before_training: false
+
+# Warmup
+warmup:
+  enabled: true
+  epochs: 5
+  start_lr: 1e-6
+
+# Device & Performance
+device: "cuda"  # cuda, cpu, mps
+num_workers: 4
+pin_memory: true
+persistent_workers: true
+
+# Reproducibility
+deterministic: false  # Set to true for full reproducibility (slower)
+benchmark: true  # cudnn.benchmark for faster training (non-deterministic)
+
+# Debug settings
+debug:
+  enabled: false
+  fast_dev_run: false  # Run 1 batch only
+  overfit_batches: 0  # Overfit on N batches for debugging
+  limit_train_batches: 1.0  # 1.0 = use all, 0.1 = use 10%
+  limit_val_batches: 1.0
+
+# Logging
+logging:
+  log_every_n_steps: 10
+  log_images: true
+  num_images_to_log: 4  # Log N images per validation

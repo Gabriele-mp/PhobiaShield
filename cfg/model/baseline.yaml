@@ -1,0 +1,56 @@
+# Baseline Model - Ultra Lightweight for Fast Testing
+
+name: "baseline"
+
+architecture:
+  type: "Baseline"
+  backbone: "simple_cnn"
+  
+  input_size: [224, 224]  # Smaller for faster training
+  in_channels: 3
+  
+  grid_size: 7  # 7x7 grid (224/32)
+  num_boxes_per_cell: 1  # Only 1 box per cell
+  
+  # Simplified layers
+  layers:
+    - filters: 16
+      kernel_size: 3
+      stride: 1
+      padding: 1
+      activation: "relu"
+      batch_norm: true
+      pool: true
+      
+    - filters: 32
+      kernel_size: 3
+      stride: 1
+      padding: 1
+      activation: "relu"
+      batch_norm: true
+      pool: true
+      
+    - filters: 64
+      kernel_size: 3
+      stride: 1
+      padding: 1
+      activation: "relu"
+      batch_norm: true
+      pool: true
+      
+  leaky_relu_slope: 0.1
+  dropout: 0.2
+
+output:
+  num_classes: 3
+
+loss:
+  lambda_coord: 5.0
+  lambda_noobj: 0.5
+  lambda_obj: 1.0
+  lambda_class: 1.0
+  iou_threshold: 0.5
+
+init:
+  type: "xavier"
+  mode: "fan_avg"
