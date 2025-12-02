@@ -1,401 +1,146 @@
-"""
-Training Script for PhobiaShield
-
-Usage:
-    python scripts/train.py                                    # Default config
-    python scripts/train.py model=baseline training=fast_test  # Override config
-    python scripts/train.py training.epochs=100 training.lr=0.01  # Override params
-"""
-
-import sys
-import os
-from pathlib import Path
-
-# Add src to path
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-
 import torch
-import torch.nn as nn
-from torch.utils.data import DataLoader
-import hydra
-from omegaconf import DictConfig, OmegaConf
-import wandb
+import torchvision.transforms as transforms
+import torch.optim as optim
+import torchvision.transforms.functional as FT
 from tqdm import tqdm
+from torch.utils.data import DataLoader
+import os
+import random
 import numpy as np
 
-from data.dataset import PhobiaDataset, get_transforms
-from models.phobia_net import create_model
-from models.loss import PhobiaLoss
+# --- IMPORTAZIONI CUSTOM ---
+# Assumiamo che il Membro 1 rispetti i nomi delle classi concordati
+from src.models.phobia_net import PhobiaNet 
+from src.models.loss import YoloLoss
+from src.data.dataset import PhobiaDataset
+
+# --- HYPERPARAMETERS & CONFIG ---
+# Questi parametri definiscono "come" impara il cervello
+LEARNING_RATE = 2e-5
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+BATCH_SIZE = 16 
+WEIGHT_DECAY = 0
+EPOCHS = 100
+NUM_WORKERS = 2
+PIN_MEMORY = True
+LOAD_MODEL = False
+LOAD_MODEL_FILE = "best_checkpoint.pth.tar"
+IMG_DIR = "PhobiaDataset/images"
+LABEL_DIR = "PhobiaDataset/labels"
+
+# Parametri specifici dell'Architettura
+SPLIT_SIZE = 7       # Griglia 7x7
+NUM_BOXES = 2        # 2 box per cella
+NUM_CLASSES = 5      # Ragni (0) , Aghi, Serpenti, Squali, Sangue
+
+def seed_everything(seed=42):
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
 
-class Trainer:
-    """Training manager for PhobiaNet."""
+def train_fn(train_loader, model, optimizer, loss_fn):
+    """
+    Funzione che gestisce una singola epoca di addestramento.
+    """
+    loop = tqdm(train_loader, leave=True)
+    mean_loss = []
+
+    for batch_idx, (x, y) in enumerate(loop):
+        x, y = x.to(DEVICE), y.to(DEVICE)
+        
+        # 1. Forward Pass
+        # Il modello sputa le predizioni
+        out = model(x)
+        
+        # 2. Calcolo Loss
+        # La Loss Function confronta le predizioni (out) con la verità (y)
+        loss = loss_fn(out, y)
+        
+        # Aggiungiamo il valore alla lista per calcolare la media alla fine
+        mean_loss.append(loss.item())
+        
+        # 3. Backward Pass (Backpropagation)
+        optimizer.zero_grad() # Azzeriamo i gradienti vecchi
+        loss.backward()       # Calcoliamo i nuovi gradienti
+        optimizer.step()      # Aggiorniamo i pesi della rete
+
+        # Aggiorniamo la barra di progresso
+        loop.set_description(f"Loss: {loss.item():.4f}")
+
+    print(f"Mean loss was {sum(mean_loss)/len(mean_loss)}")
+
+def save_checkpoint(state, filename="my_checkpoint.pth.tar"):
+    print("=> Saving checkpoint")
+    torch.save(state, filename)
+
+def load_checkpoint(checkpoint, model, optimizer):
+    print("=> Loading checkpoint")
+    model.load_state_dict(checkpoint["state_dict"])
+    optimizer.load_state_dict(checkpoint["optimizer"])
+
+def main():
+    seed_everything(42) 
+    print(f"[SETUP] Device: {DEVICE}")
     
-    def __init__(self, config: DictConfig):
-        self.config = config
-        self.device = torch.device(config.device if torch.cuda.is_available() else "cpu")
-        
-        # Set seed
-        self._set_seed(config.seed)
-        
-        # Initialize W&B
-        if config.wandb.enabled:
-            wandb.init(
-                project=config.wandb.project,
-                entity=config.wandb.entity,
-                name=config.wandb.name,
-                config=OmegaConf.to_container(config, resolve=True),
-                tags=config.wandb.tags,
-                notes=config.wandb.notes,
-                mode=config.wandb.mode,
-            )
-        
-        # Create dataloaders
-        self.train_loader, self.val_loader = self._create_dataloaders()
-        
-        # Create model
-        self.model = create_model(OmegaConf.to_container(config.model, resolve=True))
-        self.model = self.model.to(self.device)
-        print(f"Model created with {sum(p.numel() for p in self.model.parameters()):,} parameters")
-        
-        # Create loss function
-        self.criterion = PhobiaLoss(
-            lambda_coord=config.model.loss.lambda_coord,
-            lambda_obj=config.model.loss.lambda_obj,
-            lambda_noobj=config.model.loss.lambda_noobj,
-            lambda_class=config.model.loss.lambda_class,
-            grid_size=config.model.architecture.grid_size,
-            num_boxes=config.model.architecture.num_boxes_per_cell,
-            num_classes=config.model.output.num_classes,
-        )
-        
-        # Create optimizer
-        self.optimizer = self._create_optimizer()
-        
-        # Create scheduler
-        self.scheduler = self._create_scheduler() if config.training.scheduler.enabled else None
-        
-        # Training state
-        self.current_epoch = 0
-        self.best_val_loss = float('inf')
-        
-    def _set_seed(self, seed: int):
-        """Set random seed for reproducibility."""
-        torch.manual_seed(seed)
-        np.random.seed(seed)
-        if torch.cuda.is_available():
-            torch.cuda.manual_seed(seed)
+    # 1. Inizializzazione Modello (Responsabilità: Membro 1 + Membro 2)
+    # Nota: Passiamo i parametri dinamici per adattare la rete ai nostri 5 target
+    model = PhobiaNet(split_size=SPLIT_SIZE, num_boxes=NUM_BOXES, num_classes=NUM_CLASSES).to(DEVICE)
     
-    def _create_dataloaders(self):
-        """Create train and validation dataloaders."""
-        cfg = self.config
-        
-        # Transforms
-        train_transform = get_transforms(cfg, mode="train")
-        val_transform = get_transforms(cfg, mode="val")
-        
-        # Datasets
-        train_dataset = PhobiaDataset(
-            root_dir=cfg.paths.raw_data,
-            annotations_file=cfg.data.paths.train_annotations,
-            image_size=tuple(cfg.data.image.size),
-            transform=train_transform,
-            grid_size=cfg.model.architecture.grid_size,
-            num_boxes=cfg.model.architecture.num_boxes_per_cell,
-            num_classes=cfg.model.output.num_classes,
-        )
-        
-        val_dataset = PhobiaDataset(
-            root_dir=cfg.paths.raw_data,
-            annotations_file=cfg.data.paths.val_annotations,
-            image_size=tuple(cfg.data.image.size),
-            transform=val_transform,
-            grid_size=cfg.model.architecture.grid_size,
-            num_boxes=cfg.model.architecture.num_boxes_per_cell,
-            num_classes=cfg.model.output.num_classes,
-        )
-        
-        # Dataloaders
-        train_loader = DataLoader(
-            train_dataset,
-            batch_size=cfg.training.batch_size,
-            shuffle=True,
-            num_workers=cfg.training.num_workers,
-            pin_memory=cfg.training.pin_memory,
-            drop_last=cfg.data.dataloader.drop_last,
-        )
-        
-        val_loader = DataLoader(
-            val_dataset,
-            batch_size=cfg.training.batch_size,
-            shuffle=False,
-            num_workers=cfg.training.num_workers,
-            pin_memory=cfg.training.pin_memory,
-        )
-        
-        print(f"Train dataset: {len(train_dataset)} samples")
-        print(f"Val dataset: {len(val_dataset)} samples")
-        
-        return train_loader, val_loader
+    # 2. Inizializzazione Optimizer
+    # Adam è lo standard d'oro per la convergenza veloce
+    optimizer = optim.Adam(
+        model.parameters(), 
+        lr=LEARNING_RATE, 
+        weight_decay=WEIGHT_DECAY
+    )
     
-    def _create_optimizer(self):
-        """Create optimizer."""
-        cfg = self.config.training.optimizer
+    # 3. Inizializzazione Loss (Responsabilità: Membro 1)
+    loss_fn = YoloLoss()
+
+    # 4. Caricamento Checkpoint (Opzionale)
+    if LOAD_MODEL:
+        load_checkpoint(torch.load(LOAD_MODEL_FILE), model, optimizer)
+
+    # 5. Dataset e DataLoader (Responsabilità: Membro 2) [Cite: 31]
+    # Augment=True è fondamentale qui per usare la tua data augmentation "on the fly"
+    train_dataset = PhobiaDataset(
+        list_path=IMG_DIR,
+        transform=None, # La trasformazione è gestita internamente dalla classe col parametro augment
+        augment=True,
+        img_size=416
+    )
+
+    train_loader = DataLoader(
+        dataset=train_dataset,
+        batch_size=BATCH_SIZE,
+        num_workers=NUM_WORKERS,
+        pin_memory=PIN_MEMORY,
+        shuffle=True, # Mischiamo i dati per evitare bias
+        drop_last=False,
+        collate_fn=PhobiaDataset.collate_fn # Fondamentale per gestire batch di box variabili
+    )
+
+    print(f"[INFO] Inizio training su {len(train_dataset)} immagini per {EPOCHS} epoche.")
+
+    # 6. Ciclo di Training [Cite: 32]
+    for epoch in range(EPOCHS):
+        print(f"\n--- Epoch {epoch+1}/{EPOCHS} ---")
         
-        if cfg.type == "adam":
-            return torch.optim.Adam(
-                self.model.parameters(),
-                lr=cfg.lr,
-                betas=tuple(cfg.betas),
-                eps=cfg.eps,
-                weight_decay=cfg.weight_decay,
-            )
-        elif cfg.type == "sgd":
-            return torch.optim.SGD(
-                self.model.parameters(),
-                lr=cfg.lr,
-                momentum=cfg.momentum,
-                weight_decay=cfg.weight_decay,
-                nesterov=cfg.nesterov,
-            )
-        elif cfg.type == "adamw":
-            return torch.optim.AdamW(
-                self.model.parameters(),
-                lr=cfg.lr,
-                betas=tuple(cfg.betas),
-                eps=cfg.eps,
-                weight_decay=cfg.weight_decay,
-            )
-        else:
-            raise ValueError(f"Unknown optimizer: {cfg.type}")
-    
-    def _create_scheduler(self):
-        """Create learning rate scheduler."""
-        cfg = self.config.training.scheduler
+        train_fn(train_loader, model, optimizer, loss_fn)
         
-        if cfg.type == "step":
-            return torch.optim.lr_scheduler.StepLR(
-                self.optimizer,
-                step_size=cfg.step_size,
-                gamma=cfg.gamma,
-            )
-        elif cfg.type == "cosine":
-            return torch.optim.lr_scheduler.CosineAnnealingLR(
-                self.optimizer,
-                T_max=cfg.T_max,
-                eta_min=cfg.eta_min,
-            )
-        elif cfg.type == "plateau":
-            return torch.optim.lr_scheduler.ReduceLROnPlateau(
-                self.optimizer,
-                mode=cfg.mode,
-                factor=cfg.factor,
-                patience=cfg.patience,
-                threshold=cfg.threshold,
-            )
-        else:
-            raise ValueError(f"Unknown scheduler: {cfg.type}")
-    
-    def train_epoch(self) -> dict:
-        """Train for one epoch."""
-        self.model.train()
-        
-        total_loss = 0
-        total_coord_loss = 0
-        total_conf_obj_loss = 0
-        total_conf_noobj_loss = 0
-        total_class_loss = 0
-        
-        pbar = tqdm(self.train_loader, desc=f"Epoch {self.current_epoch+1}")
-        
-        for batch_idx, (images, targets) in enumerate(pbar):
-            images = images.to(self.device)
-            targets = targets.to(self.device)
-            
-            # Forward
-            outputs = self.model(images)
-            loss, loss_dict = self.criterion(outputs, targets)
-            
-            # Backward
-            self.optimizer.zero_grad()
-            loss.backward()
-            
-            # Gradient clipping
-            if self.config.training.gradient_clip.enabled:
-                torch.nn.utils.clip_grad_norm_(
-                    self.model.parameters(),
-                    self.config.training.gradient_clip.max_norm,
-                )
-            
-            self.optimizer.step()
-            
-            # Accumulate losses
-            total_loss += loss.item()
-            total_coord_loss += loss_dict["coord_loss"]
-            total_conf_obj_loss += loss_dict["conf_loss_obj"]
-            total_conf_noobj_loss += loss_dict["conf_loss_noobj"]
-            total_class_loss += loss_dict["class_loss"]
-            
-            # Update progress bar
-            pbar.set_postfix({
-                "loss": f"{loss.item():.4f}",
-                "coord": f"{loss_dict['coord_loss']:.4f}",
-                "class": f"{loss_dict['class_loss']:.4f}",
-            })
-            
-            # Log to W&B
-            if self.config.wandb.enabled and batch_idx % self.config.logging.log_every_n_steps == 0:
-                wandb.log({
-                    "train/batch_loss": loss.item(),
-                    "train/batch_coord_loss": loss_dict["coord_loss"],
-                    "train/batch_conf_obj_loss": loss_dict["conf_loss_obj"],
-                    "train/batch_conf_noobj_loss": loss_dict["conf_loss_noobj"],
-                    "train/batch_class_loss": loss_dict["class_loss"],
-                })
-        
-        # Average losses
-        num_batches = len(self.train_loader)
-        metrics = {
-            "train/loss": total_loss / num_batches,
-            "train/coord_loss": total_coord_loss / num_batches,
-            "train/conf_obj_loss": total_conf_obj_loss / num_batches,
-            "train/conf_noobj_loss": total_conf_noobj_loss / num_batches,
-            "train/class_loss": total_class_loss / num_batches,
-        }
-        
-        return metrics
-    
-    def validate(self) -> dict:
-        """Validate the model."""
-        self.model.eval()
-        
-        total_loss = 0
-        total_coord_loss = 0
-        total_conf_obj_loss = 0
-        total_conf_noobj_loss = 0
-        total_class_loss = 0
-        
-        with torch.no_grad():
-            for images, targets in tqdm(self.val_loader, desc="Validation"):
-                images = images.to(self.device)
-                targets = targets.to(self.device)
-                
-                # Forward
-                outputs = self.model(images)
-                loss, loss_dict = self.criterion(outputs, targets)
-                
-                # Accumulate losses
-                total_loss += loss.item()
-                total_coord_loss += loss_dict["coord_loss"]
-                total_conf_obj_loss += loss_dict["conf_loss_obj"]
-                total_conf_noobj_loss += loss_dict["conf_loss_noobj"]
-                total_class_loss += loss_dict["class_loss"]
-        
-        # Average losses
-        num_batches = len(self.val_loader)
-        metrics = {
-            "val/loss": total_loss / num_batches,
-            "val/coord_loss": total_coord_loss / num_batches,
-            "val/conf_obj_loss": total_conf_obj_loss / num_batches,
-            "val/conf_noobj_loss": total_conf_noobj_loss / num_batches,
-            "val/class_loss": total_class_loss / num_batches,
-        }
-        
-        return metrics
-    
-    def save_checkpoint(self, filename: str = "checkpoint.pth"):
-        """Save model checkpoint."""
-        checkpoint_dir = Path(self.config.paths.checkpoints)
-        checkpoint_dir.mkdir(parents=True, exist_ok=True)
-        
+        # Salviamo il checkpoint ad ogni epoca (o potremmo farlo ogni 10)
+        # Questo file sarà quello che passerai al Membro 3 per la Demo
         checkpoint = {
-            "epoch": self.current_epoch,
-            "model_state_dict": self.model.state_dict(),
-            "optimizer_state_dict": self.optimizer.state_dict(),
-            "best_val_loss": self.best_val_loss,
-            "config": OmegaConf.to_container(self.config, resolve=True),
+            "state_dict": model.state_dict(),
+            "optimizer": optimizer.state_dict(),
         }
-        
-        if self.scheduler:
-            checkpoint["scheduler_state_dict"] = self.scheduler.state_dict()
-        
-        torch.save(checkpoint, checkpoint_dir / filename)
-        print(f"Checkpoint saved: {checkpoint_dir / filename}")
-    
-    def train(self):
-        """Main training loop."""
-        print("\n" + "="*50)
-        print("Starting Training")
-        print("="*50)
-        
-        for epoch in range(self.config.training.epochs):
-            self.current_epoch = epoch
-            
-            # Train
-            train_metrics = self.train_epoch()
-            
-            # Validate
-            if (epoch + 1) % self.config.training.validation.check_every_n_epochs == 0:
-                val_metrics = self.validate()
-            else:
-                val_metrics = {}
-            
-            # Combine metrics
-            all_metrics = {**train_metrics, **val_metrics}
-            all_metrics["epoch"] = epoch
-            all_metrics["lr"] = self.optimizer.param_groups[0]["lr"]
-            
-            # Log to W&B
-            if self.config.wandb.enabled:
-                wandb.log(all_metrics)
-            
-            # Print metrics
-            print(f"\nEpoch {epoch+1}/{self.config.training.epochs}")
-            print(f"  Train Loss: {train_metrics['train/loss']:.4f}")
-            if val_metrics:
-                print(f"  Val Loss: {val_metrics['val/loss']:.4f}")
-            print(f"  LR: {all_metrics['lr']:.6f}")
-            
-            # Save checkpoint
-            if (epoch + 1) % self.config.training.checkpoint.save_every_n_epochs == 0:
-                self.save_checkpoint(f"checkpoint_epoch_{epoch+1}.pth")
-            
-            # Save best model
-            if val_metrics and val_metrics["val/loss"] < self.best_val_loss:
-                self.best_val_loss = val_metrics["val/loss"]
-                self.save_checkpoint("best_model.pth")
-                print("  ✓ Best model saved!")
-            
-            # Update scheduler
-            if self.scheduler:
-                if isinstance(self.scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
-                    if val_metrics:
-                        self.scheduler.step(val_metrics["val/loss"])
-                else:
-                    self.scheduler.step()
-        
-        print("\n" + "="*50)
-        print("Training completed!")
-        print("="*50)
-        
-        # Save final model
-        self.save_checkpoint("final_model.pth")
-        
-        if self.config.wandb.enabled:
-            wandb.finish()
-
-
-@hydra.main(config_path="../cfg", config_name="config", version_base=None)
-def main(cfg: DictConfig):
-    """Main entry point."""
-    print(OmegaConf.to_yaml(cfg))
-    
-    # Create trainer
-    trainer = Trainer(cfg)
-    
-    # Start training
-    trainer.train()
-
+        save_checkpoint(checkpoint, filename=f"checkpoint_epoch_{epoch+1}.pth.tar")
 
 if __name__ == "__main__":
     main()
