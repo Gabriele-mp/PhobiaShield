@@ -1,22 +1,24 @@
-# --- System Junk ---
+# --- System & Python Junk ---
 __pycache__/
 *.py[cod]
+*.pyc
 .DS_Store
 Thumbs.db
+*.egg-info/
 
 # --- Environments (Protezione Doppia) ---
 .venv/
 venv/
 env/
+.conda/
 
 # --- IDE ---
 .vscode/
 
-# --- DATA WORKSPACE (La tua zona di quarantena) ---
+# --- DATA (Protezione Totale) ---
+# Ignoriamo la tua workspace e tutta la cartella dati del team
 data_workspace/
-data/raw/
-data/images/
-data/labels/
+data/
 
 # --- LARGE FILES (Vietati su GitHub) ---
 *.pth
@@ -24,6 +26,6 @@ data/labels/
 *.zip
 outputs/
 
-# --- Secrets ---
+# --- Secrets & Logs ---
 wandb/
 .env
