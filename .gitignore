@@ -5,3 +5,8 @@ __pycache__/
 .env
 *.egg-info/
 !src/data/
+wandb/
+outputs/
+__pycache__/
+.hydra/
+*.pyc
