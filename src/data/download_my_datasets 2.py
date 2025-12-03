@@ -40,7 +40,7 @@ shark_dataset.export(
     export_dir="data/raw/shark",
     dataset_type=fo.types.YOLOv5Dataset,
     label_field="ground_truth",
-    classes=["Shark"]
+    #classes=["Shark"]
 )
 
 print("✅ Shark downloaded!")

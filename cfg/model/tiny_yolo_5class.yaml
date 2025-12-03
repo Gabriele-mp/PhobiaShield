@@ -1,0 +1,30 @@
+# PhobiaNet Configuration - Final (5 classes)
+# Updated for complete PhobiaShield dataset
+
+output:
+  num_classes: 5  # Clown, Shark, Spider, Blood, Needle
+
+architecture:
+  in_channels: 3
+  grid_size: 13
+  num_boxes_per_cell: 2
+  leaky_relu_slope: 0.1
+  
+  layers:
+    - filters: 16
+      pool: true
+    - filters: 32
+      pool: true
+    - filters: 64
+      pool: true
+    - filters: 128
+      pool: true
+    - filters: 256
+      pool: true
+    - filters: 512
+      pool: false
+
+init:
+  type: "kaiming_normal"
+  mode: "fan_out"
+  nonlinearity: "leaky_relu"
