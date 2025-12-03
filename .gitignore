@@ -1,0 +1,29 @@
+# --- System Junk ---
+__pycache__/
+*.py[cod]
+.DS_Store
+Thumbs.db
+
+# --- Environments (Protezione Doppia) ---
+.venv/
+venv/
+env/
+
+# --- IDE ---
+.vscode/
+
+# --- DATA WORKSPACE (La tua zona di quarantena) ---
+data_workspace/
+data/raw/
+data/images/
+data/labels/
+
+# --- LARGE FILES (Vietati su GitHub) ---
+*.pth
+*.mp4
+*.zip
+outputs/
+
+# --- Secrets ---
+wandb/
+.env
