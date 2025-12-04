@@ -1,0 +1,41 @@
+# PhobiaShield Final Dataset Configuration
+# 5 classes: Clown, Shark, Spider, Blood, Needle
+
+data:
+  root: "data/phobiashield_final"
+  img_size: 416
+  grid_size: 13
+  num_boxes: 2
+  num_classes: 5
+  
+  class_names:
+    - "Clown"
+    - "Shark"
+    - "Spider"
+    - "Blood"
+    - "Needle"
+  
+  class_mapping:
+    clown: 0
+    shark: 1
+    spider: 2
+    blood: 3
+    needle: 4
+
+dataloader:
+  batch_size: 8
+  num_workers: 4
+  pin_memory: true
+  shuffle: true
+  drop_last: false
+
+augmentation:
+  train:
+    horizontal_flip: 0.5
+    brightness_contrast: 0.2
+    hue_saturation: 0.2
+    gaussian_noise: 0.1
+  val:
+    enabled: false
+  test:
+    enabled: false

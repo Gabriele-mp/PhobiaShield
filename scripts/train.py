@@ -11,8 +11,8 @@ import numpy as np
 # --- IMPORTAZIONI CUSTOM ---
 # Assumiamo che il Membro 1 rispetti i nomi delle classi concordati
 from src.models.phobia_net import PhobiaNet 
-from src.models.loss import YoloLoss
-from src.data.dataset import PhobiaDataset
+from src.models.loss import PhobiaLoss
+from src.data.phobia_dataset import PhobiaDataset
 
 # --- HYPERPARAMETERS & CONFIG ---
 # Questi parametri definiscono "come" impara il cervello
@@ -29,9 +29,34 @@ IMG_DIR = "PhobiaDataset/images"
 LABEL_DIR = "PhobiaDataset/labels"
 
 # Parametri specifici dell'Architettura
-SPLIT_SIZE = 7       # Griglia 7x7
+SPLIT_SIZE = 13       # Griglia 13 x 13
 NUM_BOXES = 2        # 2 box per cella
 NUM_CLASSES = 5      # Ragni (0) , Aghi, Serpenti, Squali, Sangue
+
+
+# Configurazione che phobia_net.py si aspetta
+MODEL_CONFIG = {
+    "output": {
+        "num_classes": NUM_CLASSES
+    },
+    "architecture": {
+        "grid_size": SPLIT_SIZE,  # Nota: deve essere coerente con i pooling (vedi sotto*)
+        "num_boxes_per_cell": NUM_BOXES,
+        "in_channels": 3,
+        "leaky_relu_slope": 0.1,
+        # Qui definiamo i layer come descritto nei commenti di PhobiaNet
+        "layers": [
+            {"filters": 16, "kernel_size": 3, "stride": 1, "pool": True},  # -> 208
+            {"filters": 32, "kernel_size": 3, "stride": 1, "pool": True},  # -> 104
+            {"filters": 64, "kernel_size": 3, "stride": 1, "pool": True},  # -> 52
+            {"filters": 128, "kernel_size": 3, "stride": 1, "pool": True}, # -> 26
+            {"filters": 256, "kernel_size": 3, "stride": 1, "pool": True}, # -> 13
+            {"filters": 512, "kernel_size": 3, "stride": 1, "padding": 1, "pool": False}, # -> 13 (Output finale)
+        ]
+    },
+    "init": {"type": "kaiming"}
+}
+
 
 def seed_everything(seed=42):
     os.environ['PYTHONHASHSEED'] = str(seed)
@@ -90,7 +115,7 @@ def main():
     
     # 1. Inizializzazione Modello (Responsabilità: Membro 1 + Membro 2)
     # Nota: Passiamo i parametri dinamici per adattare la rete ai nostri 5 target
-    model = PhobiaNet(split_size=SPLIT_SIZE, num_boxes=NUM_BOXES, num_classes=NUM_CLASSES).to(DEVICE)
+    model = PhobiaNet(config=MODEL_CONFIG).to(DEVICE)
     
     # 2. Inizializzazione Optimizer
     # Adam è lo standard d'oro per la convergenza veloce
@@ -101,7 +126,7 @@ def main():
     )
     
     # 3. Inizializzazione Loss (Responsabilità: Membro 1)
-    loss_fn = YoloLoss()
+    loss_fn = PhobiaLoss(grid_size=SPLIT_SIZE,num_boxes=NUM_BOXES,num_classes=NUM_CLASSES)
 
     # 4. Caricamento Checkpoint (Opzionale)
     if LOAD_MODEL:
@@ -110,10 +135,13 @@ def main():
     # 5. Dataset e DataLoader (Responsabilità: Membro 2) [Cite: 31]
     # Augment=True è fondamentale qui per usare la tua data augmentation "on the fly"
     train_dataset = PhobiaDataset(
-        list_path=IMG_DIR,
-        transform=None, # La trasformazione è gestita internamente dalla classe col parametro augment
-        augment=True,
-        img_size=416
+        img_dir=IMG_DIR,       # <--- CAMBIATO: Non più list_path
+        label_dir=LABEL_DIR,   # <--- NUOVO: Serve la cartella labels
+        img_size=416,
+        grid_size=SPLIT_SIZE,
+        num_boxes=NUM_BOXES,
+        num_classes=NUM_CLASSES,
+        augment=True
     )
 
     train_loader = DataLoader(
