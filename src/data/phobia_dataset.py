@@ -107,6 +107,19 @@ class PhobiaDataset(Dataset):
                     if len(parts) == 5:
                         class_id = int(parts[0])
                         cx, cy, w, h = map(float, parts[1:])
+                        
+                        # Clip coordinates to valid range [0, 1]
+                        cx = max(0.0, min(0.999, cx))
+                        cy = max(0.0, min(0.999, cy))
+                        w = max(0.001, min(1.0, w))
+                        h = max(0.001, min(1.0, h))
+                        
+                        # Ensure bbox doesn't go out of bounds
+                        if cx + w/2 > 1.0:
+                            w = 2 * (1.0 - cx)
+                        if cy + h/2 > 1.0:
+                            h = 2 * (1.0 - cy)
+                        
                         boxes.append([cx, cy, w, h])
                         class_labels.append(class_id)
         
@@ -147,6 +160,9 @@ class PhobiaDataset(Dataset):
         target = torch.zeros(S, S, B * 5 + C)
         
         for box, class_id in zip(boxes, class_labels):
+            # Ensure class_id is int (albumentations might return float)
+            class_id = int(class_id)
+            
             cx, cy, w, h = box
             
             # Determine grid cell
