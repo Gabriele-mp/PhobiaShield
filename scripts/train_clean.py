@@ -139,7 +139,7 @@ def train_phobiashield(
     # Initialize optimizer
     print("\n⚙️  Initializing optimizer...")
     optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=0.0001)
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=3, verbose=True)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=3)
     print(f"✓ Optimizer: Adam (lr={lr})")
     print(f"✓ Scheduler: ReduceLROnPlateau")
     

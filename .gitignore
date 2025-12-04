@@ -10,3 +10,5 @@ outputs/
 __pycache__/
 .hydra/
 *.pyc
+phobiashield_final.zip
+*.zip
