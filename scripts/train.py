@@ -135,10 +135,13 @@ def main():
     # 5. Dataset e DataLoader (Responsabilità: Membro 2) [Cite: 31]
     # Augment=True è fondamentale qui per usare la tua data augmentation "on the fly"
     train_dataset = PhobiaDataset(
-        list_path=IMG_DIR,
-        #transform=None, # La trasformazione è gestita internamente dalla classe col parametro augment
-        augment=True,
-        img_size=416
+        img_dir=IMG_DIR,       # <--- CAMBIATO: Non più list_path
+        label_dir=LABEL_DIR,   # <--- NUOVO: Serve la cartella labels
+        img_size=416,
+        grid_size=SPLIT_SIZE,
+        num_boxes=NUM_BOXES,
+        num_classes=NUM_CLASSES,
+        augment=True
     )
 
     train_loader = DataLoader(
