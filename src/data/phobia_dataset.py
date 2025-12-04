@@ -185,6 +185,12 @@ class PhobiaDataset(Dataset):
         
         return target
 
+    @staticmethod
+    def collate_fn(batch):
+        batch = [b for b in batch if b is not None]
+        images = torch.stack([b[0] for b in batch], dim=0)
+        targets = torch.stack([b[1] for b in batch], dim=0)
+        return images, targets
 
 # Test code
 if __name__ == "__main__":
