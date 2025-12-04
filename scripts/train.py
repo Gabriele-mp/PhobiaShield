@@ -11,7 +11,7 @@ import numpy as np
 # --- IMPORTAZIONI CUSTOM ---
 # Assumiamo che il Membro 1 rispetti i nomi delle classi concordati
 from src.models.phobia_net import PhobiaNet 
-from src.models.loss import YoloLoss
+from src.models.loss import PhobiaLoss
 from src.data.dataset import PhobiaDataset
 
 # --- HYPERPARAMETERS & CONFIG ---
@@ -101,7 +101,7 @@ def main():
     )
     
     # 3. Inizializzazione Loss (Responsabilità: Membro 1)
-    loss_fn = YoloLoss()
+    loss_fn = PhobiaLoss()
 
     # 4. Caricamento Checkpoint (Opzionale)
     if LOAD_MODEL:
