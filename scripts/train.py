@@ -12,7 +12,7 @@ import numpy as np
 # Assumiamo che il Membro 1 rispetti i nomi delle classi concordati
 from src.models.phobia_net import PhobiaNet 
 from src.models.loss import PhobiaLoss
-from src.data.dataset import PhobiaDataset
+from src.data.phobia_dataset import PhobiaDataset
 
 # --- HYPERPARAMETERS & CONFIG ---
 # Questi parametri definiscono "come" impara il cervello
