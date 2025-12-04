@@ -136,7 +136,7 @@ def main():
     # Augment=True è fondamentale qui per usare la tua data augmentation "on the fly"
     train_dataset = PhobiaDataset(
         list_path=IMG_DIR,
-        transform=None, # La trasformazione è gestita internamente dalla classe col parametro augment
+        #transform=None, # La trasformazione è gestita internamente dalla classe col parametro augment
         augment=True,
         img_size=416
     )
