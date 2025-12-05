@@ -103,7 +103,11 @@ class PhobiaVideoProcessor:
         os.makedirs(self.output_dir, exist_ok=True)
         save_path = os.path.join(self.output_dir, output_name)
         
-        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        # Tenta H.264 (avc1) per compatibilità web. Se fallisce, fallback su mp4v.
+        try:
+            fourcc = cv2.VideoWriter_fourcc(*'avc1')
+        except:
+            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
         out = cv2.VideoWriter(save_path, fourcc, fps, (width, height))
         
         print(f"Processing started: {input_path} -> {save_path}")
@@ -149,7 +153,7 @@ class PhobiaVideoProcessor:
 
 # UNIT TEST
 if __name__ == "__main__":
-    
+
     processor = PhobiaVideoProcessor()
     
     test_video = "assets/test_video.mp4"
