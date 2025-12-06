@@ -120,14 +120,9 @@ class PhobiaDataset(Dataset):
                         w = round(w, 6)
                         h = round(h, 6)
                         
-                        # Skip invalid boxes
-                        if w <= 0 or h <= 0:
-                            continue
-                        if cx < 0 or cy < 0 or cx > 1 or cy > 1:
-                            continue
-                        
-                        boxes.append([cx, cy, w, h])
-        
+                        if w > 0 and h > 0 and cx >= 0 and cy >= 0 and cx <= 1 and cy <= 1:
+                            boxes.append([cx, cy, w, h])
+                            class_labels.append(class_id)
         # Apply transforms
         if len(boxes) > 0:
             transformed = self.transform(image=image, bboxes=boxes, class_labels=class_labels)
