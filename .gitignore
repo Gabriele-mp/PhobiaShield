@@ -34,3 +34,4 @@ full_project.txt
 *.jpg
 check_system.py
 context_builder.py
+inspect_weights.py

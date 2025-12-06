@@ -51,10 +51,11 @@ class PhobiaDetector:
 
     def preprocess(self, img):
         """Prepare image for the network: Resize -> Normalize -> Tensor"""
-        img_resized = cv2.resize(img, (416, 416))
+        target_size = self.config.get("architecture", {}).get("img_size", 416)
+        
+        img_resized = cv2.resize(img, (target_size, target_size))
         img_rgb = cv2.cvtColor(img_resized, cv2.COLOR_BGR2RGB)
         img_norm = img_rgb / 255.0
-        # From (H, W, C) to (C, H, W) and add batch dimension
         img_tensor = torch.from_numpy(img_norm).float().permute(2, 0, 1).unsqueeze(0)
         return img_tensor.to(self.device)
 
