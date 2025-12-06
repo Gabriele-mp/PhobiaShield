@@ -12,19 +12,116 @@
 
 ## 🚀 Download & Setup (3 minuti)
 
-### Opzione 1: Google Drive (RACCOMANDATO - veloce)
+### 📥 Download dal Google Drive
 
-#### 1. Download dal Drive Condiviso
+**Link Dataset:** https://drive.google.com/file/d/1AhfNK2S9RJ_i-m_A4FZngCBr6Ea_3RaX/view?usp=share_link
 
-**Link Google Drive:** `[INSERISCI LINK QUI]`
+📦 File: `phobiashield_final.zip` (171 MB)
 
-📥 File: `phobiashield_final.zip` (171 MB)
+---
 
-#### 2. Setup nel Progetto
+## 💻 Setup su Kaggle (RACCOMANDATO)
+
+### Perché Kaggle?
+
+| | **Kaggle** | **Google Colab** |
+|---|-----------|------------------|
+| GPU Time | **30h/settimana** 🏆 | 4h/giorno ⏱️ |
+| GPU Type | P100 (16GB) / T4 | T4 (15GB) |
+| Storage | 20GB persistent | Session-based |
+| Best for | **Training lungo (50-100 epochs)** | Quick testing |
+
+**Conclusione:** Usa Kaggle per production training! ✅
+
+### Setup Kaggle Notebook
+
+#### 1. Crea Nuovo Notebook
+
+1. Vai su https://www.kaggle.com
+2. Click **"Code"** → **"New Notebook"**
+3. Settings (a destra):
+   - **Accelerator:** GPU T4 x2 (o P100 se disponibile)
+   - **Persistence:** Files only
+   - **Internet:** ON
+
+#### 2. Upload Dataset su Kaggle
+
+**Opzione A: Crea Dataset Kaggle (consigliato)**
+
+```python
+# Nel notebook Kaggle, cella 1:
+
+# Download da Google Drive
+!pip install -q gdown
+!gdown 1AhfNK2S9RJ_i-m_A4FZngCBr6Ea_3RaX -O phobiashield_final.zip
+
+# Unzip
+!unzip -q phobiashield_final.zip -d /kaggle/working/data/
+
+# Verifica
+!ls /kaggle/working/data/phobiashield_final/train/images | wc -l  # Should be 1647
+```
+
+**Opzione B: Upload come Kaggle Dataset**
+
+1. Vai su https://www.kaggle.com/datasets
+2. Click **"New Dataset"**
+3. Upload `phobiashield_final.zip`
+4. Titolo: "PhobiaShield Final Dataset"
+5. Publish (private o public)
+6. Nel notebook: Add Data → tuo dataset
+
+#### 3. Clone Repository
+
+```python
+# Cella 2: Clone repo
+!git clone https://github.com/Gabriele-mp/PhobiaShield.git
+%cd PhobiaShield
+
+# Install dependencies
+!pip install -q -r requirements.txt
+!pip install -e .
+```
+
+#### 4. Verifica GPU
+
+```python
+# Cella 3: Check GPU
+import torch
+print(f"GPU Available: {torch.cuda.is_available()}")
+print(f"GPU Name: {torch.cuda.get_device_name(0)}")
+print(f"GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.2f} GB")
+```
+
+#### 5. Training
+
+```python
+# Cella 4: Start training
+!python scripts/train_clean.py \
+    --data /kaggle/working/data/phobiashield_final \
+    --config cfg/model/tiny_yolo_5class.yaml \
+    --epochs 50 \
+    --batch-size 8 \
+    --lr 0.0001
+```
+
+**Tempo stimato:** ~75 min per 50 epochs su T4
+
+---
+
+## 🔧 Setup Locale (Mac/Linux)
 
 ```bash
 # Nel tuo PhobiaShield directory
 cd ~/Desktop/PhobiaShield
+
+# Download da Google Drive (manuale o con gdown)
+# Opzione 1: Download browser, poi:
+cp ~/Downloads/phobiashield_final.zip .
+
+# Opzione 2: Con gdown
+pip install gdown
+gdown 1AhfNK2S9RJ_i-m_A4FZngCBr6Ea_3RaX
 
 # Unzip
 unzip phobiashield_final.zip -d data/
@@ -33,24 +130,6 @@ unzip phobiashield_final.zip -d data/
 ls data/phobiashield_final/train/images | wc -l  # Should be 1647
 ls data/phobiashield_final/val/images | wc -l    # Should be 353
 ls data/phobiashield_final/test/images | wc -l   # Should be 354
-```
-
-#### 3. Ready!
-
-```python
-# Test caricamento
-from src.data.phobia_dataset import PhobiaDataset
-
-dataset = PhobiaDataset(
-    'data/phobiashield_final/train/images',
-    'data/phobiashield_final/train/labels',
-    img_size=416,
-    grid_size=13,
-    num_boxes=2,
-    num_classes=5
-)
-
-print(f"Dataset size: {len(dataset)}")  # Should be 1647
 ```
 
 ---
@@ -118,14 +197,6 @@ Ogni `.txt` file contiene una riga per oggetto:
 | Test | 354 | 15% |
 | **TOTAL** | **2354** | **100%** |
 
-### Provenienza Dataset
-
-- **Clown:** Roboflow (794 images)
-- **Shark:** Open Images Dataset (400 images)
-- **Spider:** Dataset Marco (634 images)
-- **Blood:** Dataset Marco (471 images)
-- **Needle:** Dataset Marco (55 images)
-
 ---
 
 ## 💻 Utilizzo nel Codice
@@ -133,7 +204,6 @@ Ogni `.txt` file contiene una riga per oggetto:
 ### 1. Training con train.py (Trainer)
 
 ```bash
-# Training completo
 python scripts/train.py \
     model=tiny_yolo_5class \
     data=phobia_final \
@@ -144,11 +214,10 @@ python scripts/train.py \
 ### 2. Training con train_clean.py (The Architect)
 
 ```bash
-# Quick testing
 python scripts/train_clean.py \
     --data data/phobiashield_final \
     --config cfg/model/tiny_yolo_5class.yaml \
-    --epochs 10 \
+    --epochs 50 \
     --batch-size 8
 ```
 
@@ -184,6 +253,29 @@ for images, targets in train_loader:
     # targets: [8, 13, 13, 20]
     pass
 ```
+
+---
+
+## 📈 Performance Attese
+
+### Training su Kaggle (T4 GPU)
+
+| Epochs | Tempo | Val Loss | mAP@0.5 | Status |
+|--------|-------|----------|---------|--------|
+| 10 | ~15 min | ~17.5 | 0.00-0.10 | Early learning ⏳ |
+| 30 | ~45 min | ~12-15 | 0.20-0.35 | Learning bbox 📈 |
+| 50 | ~75 min | ~8-12 | 0.40-0.60 | **GOOD** ✅ |
+| 100 | ~150 min | ~5-8 | 0.60-0.75 | **EXCELLENT** 🏆 |
+
+**Raccomandazione:** 50 epochs minimum per production model
+
+### Limiti GPU
+
+| Platform | GPU Time | Best For |
+|----------|----------|----------|
+| **Kaggle** | 30h/settimana | Production training (50-100 epochs) |
+| **Google Colab** | 4h/giorno | Quick testing (10-20 epochs) |
+| **Locale** | Illimitato (se hai GPU) | Development & debugging |
 
 ---
 
@@ -238,7 +330,7 @@ loss:
 
 ### Problema: "ValueError: bbox out of range"
 
-**Soluzione:** Assicurati di usare `phobia_dataset.py` con i bbox fixes (già su main):
+**Soluzione:** Assicurati di usare `phobia_dataset.py` con i bbox fixes:
 
 ```python
 from src.data.phobia_dataset import PhobiaDataset  # ✅ Questa versione ha i fix
@@ -246,210 +338,125 @@ from src.data.phobia_dataset import PhobiaDataset  # ✅ Questa versione ha i fi
 
 ### Problema: "IndexError: class_id"
 
-**Soluzione:** Già fixato in `phobia_dataset.py` (cast to int). Assicurati di aver pullato da main.
-
-### Problema: Dataset non trovato
+**Soluzione:** Già fixato in `phobia_dataset.py`. Pull da main:
 
 ```bash
-# Verifica path
-ls data/phobiashield_final/train/images | head -5
-
-# Se vuoto, unzip di nuovo
-unzip phobiashield_final.zip -d data/
+git checkout main
+git pull origin main
 ```
 
-### Problema: Troppo lento su CPU
+### Problema: Kaggle dataset non trovato
 
 ```python
-# Disabilita augmentation per velocizzare
-dataset = PhobiaDataset(..., augment=False)
-
-# Riduci num_workers
-train_loader = DataLoader(..., num_workers=0)  # Single thread
-```
-
----
-
-## 🔄 Opzione 2: Rigenerare Localmente (Avanzato)
-
-Se hai accesso ai dataset originali:
-
-### Prerequisiti
-
-```
-~/Desktop/Marco_Data/
-  Blood_ID3/
-    images/ (471 images)
-    labels/
-  Needles_ID4/
-    images/ (55 images)
-    labels/
-
-~/Desktop/Phobia/
-  images/ (634 spider images)
-  labels/
-
-PhobiaShield/data/raw/
-  clown/ (da download Roboflow - 794 images)
-  shark/ (da download Open Images - 400 images)
-```
-
-### Step 1: Download Clown e Shark
-
-```bash
-cd ~/Desktop/PhobiaShield
-
-# Clown dataset (Roboflow)
-# Scarica manualmente da Roboflow e metti in data/raw/clown/
-
-# Shark dataset (Open Images)
-python scripts/download_shark.py  # Se hai lo script
-```
-
-### Step 2: Merge
-
-```bash
-# Esegui merge script
-python scripts/merge_final_dataset.py
-
-# Output: data/phobiashield_final/ con tutti i file
-```
-
-**Tempo:** ~10 minuti (dipende da velocità disco)
-
----
-
-## 📈 Performance Attese
-
-### Training 10 Epochs (Quick Test)
-
-```
-Tempo: ~15 min su Tesla T4 (Google Colab)
-Val Loss: ~17.5
-mAP@0.5: 0.00-0.10 (normale, troppo poco training)
-```
-
-### Training 50 Epochs (Production)
-
-```
-Tempo: ~75 min su Tesla T4
-Val Loss: ~8-12
-mAP@0.5: 0.40-0.60 (BUONO)
-```
-
-### Training 100 Epochs (Ottimale)
-
-```
-Tempo: ~150 min su Tesla T4
-Val Loss: ~5-8
-mAP@0.5: 0.60-0.75 (ECCELLENTE)
-```
-
----
-
-## 🎯 Tips & Best Practices
-
-### 1. Class Balancing
-
-Dataset sbilanciato (Blood 79%, Needle 1%). Considera:
-
-```python
-# Opzione A: Class weights nella loss
-class_weights = torch.tensor([1.0, 2.0, 2.0, 0.5, 10.0])  # Penalizza Blood, boost Needle
-
-# Opzione B: Weighted sampling
-from torch.utils.data import WeightedRandomSampler
-# Implementa sampling che bilancia le classi
-```
-
-### 2. Augmentation Strategy
-
-```python
-# Training: Aggressive augmentation
-train_dataset = PhobiaDataset(..., augment=True)
-
-# Validation/Test: No augmentation
-val_dataset = PhobiaDataset(..., augment=False)
-```
-
-### 3. Monitoring
-
-```python
-import wandb
-
-wandb.init(project="phobiashield", name="my-experiment")
-
-for epoch in range(epochs):
-    train_loss = train_epoch()
-    val_loss = validate()
-    
-    wandb.log({
-        "train_loss": train_loss,
-        "val_loss": val_loss,
-        "epoch": epoch
-    })
-```
-
-### 4. Checkpoint Management
-
-```python
-# Salva best model
-if val_loss < best_val_loss:
-    torch.save({
-        'epoch': epoch,
-        'model_state_dict': model.state_dict(),
-        'optimizer_state_dict': optimizer.state_dict(),
-        'val_loss': val_loss,
-    }, 'outputs/checkpoints/best_model.pth')
-```
-
----
-
-## 📚 Documentazione Componenti
-
-### PhobiaDataset (The Architect)
-
-**File:** `src/data/phobia_dataset.py`
-
-**Features:**
-- ✅ Bbox clipping [0, 1]
-- ✅ Overflow prevention
-- ✅ class_id cast to int
-- ✅ Albumentations integration
-- ✅ collate_fn per DataLoader
-
-**Usage:**
-```python
+# Su Kaggle, usa path assoluto
 dataset = PhobiaDataset(
-    images_dir='data/phobiashield_final/train/images',
-    labels_dir='data/phobiashield_final/train/labels',
-    img_size=416,
-    grid_size=13,
-    num_boxes=2,
-    num_classes=5,
-    augment=True
+    '/kaggle/working/data/phobiashield_final/train/images',
+    '/kaggle/working/data/phobiashield_final/train/labels',
+    ...
 )
 ```
 
-### PhobiaNet (The Architect)
+### Problema: Google Drive download lento
 
-**File:** `src/models/phobia_net.py`
+```python
+# Usa gdown con progress bar
+!pip install gdown
+!gdown --fuzzy 1AhfNK2S9RJ_i-m_A4FZngCBr6Ea_3RaX
+```
 
-**Architecture:**
-- 6 convolutional layers
-- 1.58M parameters (~6.3 MB)
-- Input: [B, 3, 416, 416]
-- Output: [B, 13, 13, 20] (grid predictions)
+### Problema: Out of Memory su GPU
 
-### PhobiaLoss (The Architect)
+```python
+# Riduci batch size
+!python scripts/train_clean.py --batch-size 4  # Invece di 8
 
-**File:** `src/models/loss.py`
+# Oppure disabilita augmentation temporaneamente
+dataset = PhobiaDataset(..., augment=False)
+```
 
-**Components:**
-- Coordinate Loss (MSE): λ=5.0
-- Objectness Loss (BCE): λ=1.0
-- No-object Loss (BCE): λ=0.5
-- Classification Loss (CE): λ=1.0
+---
+
+## 📓 Kaggle Notebook Template
+
+Copia-incolla questo template per iniziare velocemente:
+
+```python
+# ============================================================
+# CELL 1: Setup
+# ============================================================
+!pip install -q gdown
+!gdown 1AhfNK2S9RJ_i-m_A4FZngCBr6Ea_3RaX -O phobiashield_final.zip
+!unzip -q phobiashield_final.zip -d /kaggle/working/data/
+
+# ============================================================
+# CELL 2: Clone Repo
+# ============================================================
+!git clone https://github.com/Gabriele-mp/PhobiaShield.git
+%cd PhobiaShield
+!pip install -q -r requirements.txt
+!pip install -e .
+
+# ============================================================
+# CELL 3: Verify GPU
+# ============================================================
+import torch
+print(f"GPU: {torch.cuda.get_device_name(0)}")
+print(f"Memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.2f} GB")
+
+# Verify dataset
+!ls /kaggle/working/data/phobiashield_final/train/images | wc -l
+
+# ============================================================
+# CELL 4: Start Training (50 epochs)
+# ============================================================
+!python scripts/train_clean.py \
+    --data /kaggle/working/data/phobiashield_final \
+    --config cfg/model/tiny_yolo_5class.yaml \
+    --epochs 50 \
+    --batch-size 8 \
+    --lr 0.0001
+
+# ============================================================
+# CELL 5: Evaluate
+# ============================================================
+# Load best model and calculate mAP
+# (usa la cella metrics che hai già testato)
+
+# ============================================================
+# CELL 6: Download Model
+# ============================================================
+from IPython.display import FileLink
+FileLink('outputs/checkpoints/best_model.pth')
+```
+
+**Tempo totale:** ~90 minuti (incluso setup)
+
+---
+
+## 🎯 Workflow Consigliato
+
+### Per Quick Testing (1-2 ore)
+```
+Platform: Google Colab
+Epochs: 10-20
+Batch Size: 8
+Goal: Verificare che tutto funziona
+```
+
+### Per Production Training (2-3 ore)
+```
+Platform: Kaggle
+Epochs: 50-100
+Batch Size: 8
+Goal: Model production-ready (mAP > 0.5)
+```
+
+### Per Development
+```
+Platform: Locale (Mac/Linux)
+Task: Debug codice, test features
+No GPU needed: Usa batch_size=1, poche immagini
+```
 
 ---
 
@@ -479,8 +486,8 @@ dataset = PhobiaDataset(
 
 ## ❓ FAQ
 
-**Q: Posso usare dataset.py invece di phobia_dataset.py?**  
-A: Sì, ma phobia_dataset.py ha i bbox fixes testati. Usa quella per evitare crash.
+**Q: Meglio Kaggle o Colab?**  
+A: **Kaggle** per training lungo (50+ epochs). Colab solo per quick test.
 
 **Q: Come carico un checkpoint salvato?**  
 A:
@@ -489,20 +496,29 @@ checkpoint = torch.load('outputs/checkpoints/best_model.pth')
 model.load_state_dict(checkpoint['model_state_dict'])
 ```
 
-**Q: Il training è troppo lento su CPU?**  
-A: Usa Google Colab con GPU gratuita. Vedi `notebooks/PhobiaShield_Training_CLEAN.ipynb`
-
 **Q: mAP è 0 dopo 10 epochs, è normale?**  
-A: SÌ! YOLO from scratch richiede 50+ epochs per convergere. 10 epochs = solo early learning.
+A: SÌ! YOLO from scratch richiede 50+ epochs. 10 epochs = early learning.
 
-**Q: Come aggiungo una nuova classe?**  
-A: Modifica `num_classes` in config, aggiungi dataset con class_id corretto, ri-merge.
+**Q: Posso scaricare il model da Kaggle?**  
+A: SÌ! Usa:
+```python
+from IPython.display import FileLink
+FileLink('outputs/checkpoints/best_model.pth')
+```
+
+**Q: Kaggle session scade?**  
+A: Sì dopo 12h inattività. Ma i file in `/kaggle/working/` rimangono. Salva checkpoint spesso!
+
+**Q: Come uso più GPU su Kaggle?**  
+A: Settings → Accelerator → "GPU T4 x2" (doppia velocità!)
 
 ---
 
 ## 📞 Supporto
 
-**Issues su GitHub:** https://github.com/Gabriele-mp/PhobiaShield/issues
+**Issues GitHub:** https://github.com/Gabriele-mp/PhobiaShield/issues
+
+**Dataset Google Drive:** https://drive.google.com/file/d/1AhfNK2S9RJ_i-m_A4FZngCBr6Ea_3RaX/view
 
 **Team Contact:**
 - The Architect (Model): @Gabriele
@@ -515,14 +531,15 @@ A: Modifica `num_classes` in config, aggiungi dataset con class_id corretto, ri-
 
 Prima di iniziare il training:
 
-- [ ] Dataset scaricato e unzippato in `data/phobiashield_final/`
+- [ ] Dataset scaricato da Google Drive
+- [ ] Unzippato in `data/phobiashield_final/` (locale) o `/kaggle/working/data/` (Kaggle)
 - [ ] Verificato: 1647 train + 353 val + 354 test images
-- [ ] Config file aggiornati (`cfg/model/tiny_yolo_5class.yaml`, `cfg/data/phobia_final.yaml`)
-- [ ] Virtual environment attivato
-- [ ] Dipendenze installate (`pip install -r requirements.txt`)
-- [ ] W&B configurato (`wandb login`)
-- [ ] GPU disponibile (Colab o locale)
+- [ ] GPU attiva (Kaggle T4 o P100)
+- [ ] Repository clonata
+- [ ] Dipendenze installate
+- [ ] Config files verificati
 - [ ] `phobia_dataset.py` usato (con fix)
+- [ ] Tempo GPU disponibile: almeno 2h per 50 epochs
 
 ---
 
@@ -530,4 +547,4 @@ Prima di iniziare il training:
 **Ultimo aggiornamento:** Dicembre 6, 2025  
 **Versione:** 1.0 (final merge, 5 classes)
 
-🎯 **Ready to train! Buon lavoro team!** 🚀
+🎯 **Ready to train su Kaggle! Buon lavoro team!** 🚀
