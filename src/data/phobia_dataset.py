@@ -108,20 +108,25 @@ class PhobiaDataset(Dataset):
                         class_id = int(parts[0])
                         cx, cy, w, h = map(float, parts[1:])
                         
-                        # Clip coordinates to valid range [0, 1]
-                        cx = max(0.0, min(0.999, cx))
-                        cy = max(0.0, min(0.999, cy))
-                        w = max(0.001, min(1.0, w))
-                        h = max(0.001, min(1.0, h))
+                        # AGGRESSIVE CLIPPING - prima di albumentations
+                        cx = max(0.0, min(1.0, cx))
+                        cy = max(0.0, min(1.0, cy))
+                        w = max(0.0, min(1.0, w))
+                        h = max(0.0, min(1.0, h))
                         
-                        # Ensure bbox doesn't go out of bounds
-                        if cx + w/2 > 1.0:
-                            w = 2 * (1.0 - cx)
-                        if cy + h/2 > 1.0:
-                            h = 2 * (1.0 - cy)
+                        # Round to avoid floating point errors
+                        cx = round(cx, 6)
+                        cy = round(cy, 6)
+                        w = round(w, 6)
+                        h = round(h, 6)
+                        
+                        # Skip invalid boxes
+                        if w <= 0 or h <= 0:
+                            continue
+                        if cx < 0 or cy < 0 or cx > 1 or cy > 1:
+                            continue
                         
                         boxes.append([cx, cy, w, h])
-                        class_labels.append(class_id)
         
         # Apply transforms
         if len(boxes) > 0:
