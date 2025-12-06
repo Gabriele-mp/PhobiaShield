@@ -35,3 +35,4 @@ full_project.txt
 check_system.py
 context_builder.py
 inspect_weights.py
+verify_math_symmetry.py
