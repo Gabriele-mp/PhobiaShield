@@ -1,4 +1,4 @@
-# --- System & Python Junk ---
+# System & Python Junk
 __pycache__/
 *.py[cod]
 *.pyc
@@ -6,31 +6,30 @@ __pycache__/
 Thumbs.db
 *.egg-info/
 
-# --- Environments (Protezione Doppia) ---
+# Environments (Double Protection)
 .venv/
 venv/
 env/
 .conda/
 
-# --- IDE ---
+# IDE
 .vscode/
 
-# --- DATA (Protezione Totale) ---
-# Ignoriamo la tua workspace e tutta la cartella dati del team
+# DATA (Total Protection)
 data_workspace/
 data/
 
-# --- LARGE FILES (Vietati su GitHub) ---
+# LARGE FILES
 *.pth
 *.mp4
 *.zip
 outputs/
 
-# --- Secrets & Logs ---
+# Secrets & Logs
 wandb/
 .env
 
-# --- Ignora file personali e output ---
+# Ignore personal files and outputs
 full_project.txt
 *.jpg
 check_system.py

@@ -17,10 +17,10 @@ def main():
     args = parser.parse_args()
     
     if not os.path.exists(args.video):
-        print(f"❌ Error: Input file '{args.video}' not found.")
+        print(f"Error: Input file '{args.video}' not found.")
         return
 
-    print(f"🛡️  PhobiaShield CLI Engine Starting...")
+    print(f"PhobiaShield CLI Engine Starting...")
     print(f"   Input: {args.video}")
     print(f"   Confidence: {args.conf}")
     
@@ -34,7 +34,7 @@ def main():
             debug=not args.no_debug
         )
     except Exception as e:
-        print(f"❌ Critical Failure: {e}")
+        print(f"Critical Failure: {e}")
         import traceback
         traceback.print_exc()
 

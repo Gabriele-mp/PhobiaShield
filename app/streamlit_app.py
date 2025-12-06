@@ -3,36 +3,34 @@ import tempfile
 import os
 import sys
 
-# Aggiungi la root al path per trovare i moduli src
+# Add root to path to find src modules
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
-# Importa il motore REALE
+# Import REAL inference engine
 try:
     from src.inference.video_processor import PhobiaVideoProcessor
 except ImportError:
-    st.error("❌ Errore: Impossibile importare il motore di inferenza. Controlla il PYTHONPATH.")
+    st.error("Error: Could not import inference engine. Check PYTHONPATH.")
     st.stop()
 
-st.set_page_config(page_title="PhobiaShield Pro", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="PhobiaShield", page_icon="🛡️", layout="wide")
 
 st.title("🛡️ PhobiaShield: Intelligent Protection System")
 st.markdown("### Real-time Object Detection & Blurring Engine")
 
-# --- SIDEBAR CONFIG ---
+# SIDEBAR CONFIG
 st.sidebar.header("🔧 Engine Settings")
 conf_threshold = st.sidebar.slider("Confidence Threshold", 0.0, 1.0, 0.25, 0.05)
-# Nota: La logica del blur intensity andrebbe passata al processore, 
-# per ora la teniamo visuale o hardcoded nel blur.py se non vuoi complicare troppo.
 debug_mode = st.sidebar.checkbox("Debug Mode (Show Bounding Boxes)", value=True)
 
 st.sidebar.markdown("---")
 st.sidebar.info("System Status: **ONLINE**\nModel: PhobiaNet-Tiny (v1.0)")
 
-# --- MAIN AREA ---
+# MAIN AREA
 uploaded_file = st.file_uploader("📂 Upload Video Source (MP4)", type=['mp4', 'mov'])
 
 if uploaded_file:
-    # 1. Gestione File Temporaneo (Efficiente)
+    # Temporary File Management
     tfile = tempfile.NamedTemporaryFile(delete=False, suffix='.mp4')
     tfile.write(uploaded_file.read())
     input_path = tfile.name
@@ -42,13 +40,13 @@ if uploaded_file:
         st.subheader("Original Input")
         st.video(input_path)
 
-    # 2. Pulsante Azione
-    if st.sidebar.button("🚀 RUN PROTECTION ENGINE", type="primary"):
+    # Action Button
+    if st.sidebar.button("RUN PROTECTION ENGINE", type="primary"):
         output_filename = "processed_output.mp4"
         output_dir = tempfile.gettempdir()
         output_path = os.path.join(output_dir, output_filename)
 
-        # Inizializza Processore
+        # Initialize Processor
         status_text = st.empty()
         progress_bar = st.progress(0)
         
@@ -57,8 +55,7 @@ if uploaded_file:
         status_text.text("⏳ Initializing Neural Network...")
         
         try:
-            # ESECUZIONE REALE
-            # Nota: Qui usiamo il processore reale che hai aggiornato
+            # REAL EXECUTION
             processor.process_video(
                 input_path=input_path,
                 output_name=output_filename,
@@ -72,12 +69,12 @@ if uploaded_file:
             with col2:
                 st.subheader("Protected Output")
                 if os.path.exists(output_path):
-                    # APERTURA BINARIA (Più robusta per i browser)
+                    # BINARY OPEN (More robust for browsers)
                     with open(output_path, 'rb') as video_file:
                         video_bytes = video_file.read()
                         st.video(video_bytes, format="video/mp4")
                     
-                    # Il tasto download legge lo stesso file
+                    # Download button reads the same file
                     with open(output_path, "rb") as f:
                         st.download_button("📥 Download Protected Video", f, file_name="phobiashield_safe.mp4")
                 else:
