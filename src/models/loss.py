@@ -7,6 +7,8 @@ Loss = λ_coord * Localization Loss
      + λ_obj * Objectness Loss (when object present)
      + λ_noobj * Objectness Loss (when no object)
      + λ_class * Classification Loss
+
+OPTIMIZED VERSION: Added class weighting for imbalanced dataset
 """
 
 import torch
@@ -22,7 +24,7 @@ class PhobiaLoss(nn.Module):
     Components:
     1. Localization Loss (MSE): Penalizes incorrect bounding box coordinates
     2. Confidence Loss (BCE): Penalizes incorrect objectness predictions
-    3. Classification Loss (CE): Penalizes incorrect class predictions
+    3. Classification Loss (CE): Penalizes incorrect class predictions (WITH CLASS WEIGHTING)
     
     Args:
         lambda_coord: Weight for localization loss
@@ -32,6 +34,7 @@ class PhobiaLoss(nn.Module):
         grid_size: Grid size (S)
         num_boxes: Number of boxes per cell (B)
         num_classes: Number of classes (C)
+        class_weights: Optional tensor of class weights for imbalanced dataset (NEW!)
     """
     
     def __init__(
@@ -43,6 +46,7 @@ class PhobiaLoss(nn.Module):
         grid_size: int = 13,
         num_boxes: int = 2,
         num_classes: int = 3,
+        class_weights=None  # NEW: Class weighting for imbalanced dataset
     ):
         super().__init__()
         
@@ -54,6 +58,13 @@ class PhobiaLoss(nn.Module):
         self.grid_size = grid_size
         self.num_boxes = num_boxes
         self.num_classes = num_classes
+        
+        # NEW: Class weights for imbalanced dataset
+        if class_weights is None:
+            # Default: equal weights
+            self.class_weights = None
+        else:
+            self.class_weights = torch.tensor(class_weights, dtype=torch.float32)
         
         # Loss functions
         self.mse_loss = nn.MSELoss(reduction="sum")
@@ -90,6 +101,12 @@ class PhobiaLoss(nn.Module):
         # Counter for object cells
         n_obj_cells = 0
         n_noobj_cells = 0
+        
+        # Move class weights to device if provided
+        if self.class_weights is not None:
+            class_weights = self.class_weights.to(predictions.device)
+        else:
+            class_weights = None
         
         # Iterate through grid cells
         for i in range(S):
@@ -148,7 +165,7 @@ class PhobiaLoss(nn.Module):
                     
                     conf_loss_obj += self.bce_loss(pred_conf, target_conf)
                     
-                    # --- Classification Loss ---
+                    # --- Classification Loss (WITH CLASS WEIGHTING) ---
                     # Get class predictions
                     class_start = B * 5
                     pred_classes = predictions[obj_idx, j, i, class_start:class_start + C]
@@ -157,12 +174,22 @@ class PhobiaLoss(nn.Module):
                     # Convert target to class indices
                     target_class_idx = torch.argmax(target_classes, dim=-1)
                     
-                    # Compute cross-entropy loss
-                    class_loss += F.cross_entropy(
-                        pred_classes,
-                        target_class_idx,
-                        reduction="sum"
-                    )
+                    # Compute cross-entropy loss WITH CLASS WEIGHTS (if provided)
+                    if class_weights is not None:
+                        # NEW: Use class weights for imbalanced dataset
+                        class_loss += F.cross_entropy(
+                            pred_classes,
+                            target_class_idx,
+                            weight=class_weights,
+                            reduction="sum"
+                        )
+                    else:
+                        # Original: no weighting
+                        class_loss += F.cross_entropy(
+                            pred_classes,
+                            target_class_idx,
+                            reduction="sum"
+                        )
                 
                 # Process cells without objects
                 noobj_idx = ~has_object
@@ -194,7 +221,7 @@ class PhobiaLoss(nn.Module):
             self.lambda_class * class_loss
         )
         
-        # Loss dictionary for logging
+        # Loss dictionary for logging (SAME FORMAT AS BEFORE!)
         loss_dict = {
             "total_loss": total_loss.item(),
             "coord_loss": coord_loss.item(),
@@ -256,7 +283,7 @@ if __name__ == "__main__":
     batch_size = 4
     grid_size = 13
     num_boxes = 2
-    num_classes = 3
+    num_classes = 5  # Updated to 5 classes
     
     # Create dummy predictions and targets
     predictions = torch.randn(batch_size, grid_size, grid_size, num_boxes * 5 + num_classes)
@@ -264,9 +291,10 @@ if __name__ == "__main__":
     
     # Add some dummy targets
     targets[0, 5, 5, 0:5] = torch.tensor([0.5, 0.5, 0.3, 0.3, 1.0])  # Box
-    targets[0, 5, 5, num_boxes * 5 + 0] = 1.0  # Class 0 (spider)
+    targets[0, 5, 5, num_boxes * 5 + 0] = 1.0  # Class 0 (clown)
     
-    # Create loss
+    # Test WITHOUT class weights
+    print("Test 1: Without class weights")
     loss_fn = PhobiaLoss(
         lambda_coord=5.0,
         lambda_obj=1.0,
@@ -277,11 +305,30 @@ if __name__ == "__main__":
         num_classes=num_classes,
     )
     
-    # Compute loss
     total_loss, loss_dict = loss_fn(predictions, targets)
     
     print("Loss components:")
     for key, value in loss_dict.items():
+        print(f"  {key}: {value}")
+    
+    # Test WITH class weights
+    print("\nTest 2: With class weights (Blood penalized, Needle amplified)")
+    class_weights = [1.0, 2.0, 1.7, 0.5, 10.0]  # Clown, Shark, Spider, Blood, Needle
+    loss_fn_weighted = PhobiaLoss(
+        lambda_coord=5.0,
+        lambda_obj=1.0,
+        lambda_noobj=0.5,
+        lambda_class=1.0,
+        grid_size=grid_size,
+        num_boxes=num_boxes,
+        num_classes=num_classes,
+        class_weights=class_weights  # NEW!
+    )
+    
+    total_loss_w, loss_dict_w = loss_fn_weighted(predictions, targets)
+    
+    print("Loss components (weighted):")
+    for key, value in loss_dict_w.items():
         print(f"  {key}: {value}")
     
     # Test IoU
@@ -289,3 +336,5 @@ if __name__ == "__main__":
     box2 = torch.tensor([0.6, 0.6, 0.4, 0.4])
     iou = compute_iou(box1, box2)
     print(f"\nIoU test: {iou.item():.4f}")
+    
+    print("\n✓ Loss function with optional class weighting working!")
