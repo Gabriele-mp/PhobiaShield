@@ -1,6 +1,10 @@
-data/
+/data/
 __pycache__/
 *.pyc
 .DS_Store
 .env
 *.egg-info/
+outputs/
+wandb/
+*.zip
+__pycache__/
