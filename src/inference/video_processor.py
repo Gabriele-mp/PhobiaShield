@@ -87,69 +87,100 @@ class PhobiaVideoProcessor:
     def process_video(self, input_path: str, output_name: str = "output.mp4", simulate: bool = False, debug: bool = True):
         
         if not os.path.exists(input_path):
-            print(f"Error: Video file does not exist: {input_path}")
+            print(f"❌ CRITICAL ERROR: Video file does not exist: {input_path}")
             return
 
         cap = cv2.VideoCapture(input_path)
         if not cap.isOpened():
-            print(f"Error: Unable to open video stream: {input_path}")
+            print(f"❌ CRITICAL ERROR: Unable to open video stream: {input_path}")
             return
 
-        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        # Original dimensions
+        orig_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        orig_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         fps = cap.get(cv2.CAP_PROP_FPS)
         
+        # --- PERFORMANCE OPTIMIZATION: DOWNSCALING ---
+        # Processing 4K/1080p on CPU is too slow for a demo.
+        # We resize to a standard target width (e.g., 800px) maintaining aspect ratio.
+        # This mimics what YOLO does internally (usually 416x416 or 640x640).
+        TARGET_WIDTH = 800
+        
+        if orig_w > TARGET_WIDTH:
+            scale_ratio = TARGET_WIDTH / orig_w
+            new_w = TARGET_WIDTH
+            new_h = int(orig_h * scale_ratio)
+            print(f"⚡ Optimization: Resizing video from {orig_w}x{orig_h} to {new_w}x{new_h}")
+        else:
+            new_w, new_h = orig_w, orig_h
+            print(f"ℹ️ Info: Video size {orig_w}x{orig_h} is optimal. No resizing needed.")
+
         # Ensure output directory exists
         os.makedirs(self.output_dir, exist_ok=True)
+        
+        # Force .webm extension
+        if not output_name.endswith('.webm'):
+            output_name = os.path.splitext(output_name)[0] + '.webm'
+            
         save_path = os.path.join(self.output_dir, output_name)
         
-        # Tenta H.264 (avc1) per compatibilità web. Se fallisce, fallback su mp4v.
+        # Codec Strategy
         try:
-            fourcc = cv2.VideoWriter_fourcc(*'avc1')
+            fourcc = cv2.VideoWriter_fourcc(*'VP09')
         except:
-            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-        out = cv2.VideoWriter(save_path, fourcc, fps, (width, height))
+            fourcc = cv2.VideoWriter_fourcc(*'VP80')
+            
+        # Writer uses NEW dimensions
+        out = cv2.VideoWriter(save_path, fourcc, fps, (new_w, new_h))
         
-        print(f"Processing started: {input_path} -> {save_path}")
-        print(f"Configuration: Simulate={simulate}, Debug={debug}")
+        print(f"🎬 Processing started: {input_path} -> {save_path}")
 
         frame_idx = 0
+        start_time = time.time()
+        
         while cap.isOpened():
             ret, frame = cap.read()
             if not ret: break
 
+            # 1. RESIZE (The Speed Hack)
+            if new_w != orig_w:
+                frame = cv2.resize(frame, (new_w, new_h), interpolation=cv2.INTER_AREA)
+
             detections = []
             
-            # INFERENCE / SIMULATION
+            # 2. INFERENCE / SIMULATION
             if simulate:
                 detections = self.generate_monte_carlo_detections()
             elif self.model:
-                # TODO: Future integration with real model
                 pass
 
-            # FILTERING (NMS)
+            # 3. FILTERING (NMS)
             if nms and detections:
-                # Use Soft-NMS if available (better for close objects)
                 try:
                     detections = soft_nms(detections, iou_threshold=0.45, conf_threshold=0.25, sigma=0.5)
                 except (NameError, ImportError):
                     detections = nms(detections, iou_threshold=0.45, conf_threshold=0.25)
 
-            # TRANSFORMATION (Blur)
+            # 4. TRANSFORMATION (Blur)
             for det in detections:
                 frame = self.apply_convolutional_blur(frame, det['bbox'])
             
-            # VISUALIZATION (Delegated)
+            # 5. VISUALIZATION
             if debug and self.visualizer:
                 frame = self.visualizer.draw_detections(frame, detections)
 
             out.write(frame)
             frame_idx += 1
-            if frame_idx % 60 == 0: print(f"Processing frame {frame_idx}...")
+            
+            # Smart Logging
+            if frame_idx % 30 == 0:
+                elapsed = time.time() - start_time
+                current_fps = frame_idx / elapsed
+                print(f"Processing frame {frame_idx}... (Speed: {current_fps:.2f} fps)")
 
         cap.release()
         out.release()
-        print(f"Completed. Video saved in: {save_path}")
+        print(f"✅ Completed! Video saved in: {save_path}")
 
 # UNIT TEST
 if __name__ == "__main__":
