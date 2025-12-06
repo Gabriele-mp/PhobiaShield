@@ -296,10 +296,10 @@ if __name__ == "__main__":
     # Test WITHOUT class weights
     print("Test 1: Without class weights")
     loss_fn = PhobiaLoss(
-        lambda_coord=5.0,
-        lambda_obj=1.0,
+        lambda_coord=1.0,
+        lambda_obj=2.0,
         lambda_noobj=0.5,
-        lambda_class=1.0,
+        lambda_class=2.0,
         grid_size=grid_size,
         num_boxes=num_boxes,
         num_classes=num_classes,
