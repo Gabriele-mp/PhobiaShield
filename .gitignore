@@ -29,3 +29,9 @@ outputs/
 # --- Secrets & Logs ---
 wandb/
 .env
+
+# --- Ignora file personali e output ---
+full_project.txt
+*.jpg
+check_system.py
+context_builder.py
