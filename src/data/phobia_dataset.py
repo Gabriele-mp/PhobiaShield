@@ -108,7 +108,7 @@ class PhobiaDataset(Dataset):
                         class_id = int(parts[0])
                         cx, cy, w, h = map(float, parts[1:])
                         
-                        # AGGRESSIVE CLIPPING - prima di albumentations
+                        # AGGRESSIVE CLIPPING
                         cx = max(0.0, min(1.0, cx))
                         cy = max(0.0, min(1.0, cy))
                         w = max(0.0, min(1.0, w))
@@ -120,7 +120,26 @@ class PhobiaDataset(Dataset):
                         w = round(w, 6)
                         h = round(h, 6)
                         
-                        if w > 0 and h > 0 and cx >= 0 and cy >= 0 and cx <= 1 and cy <= 1:
+                        # Ensure bbox bounds don't exceed [0, 1]
+                        x_min = cx - w/2
+                        y_min = cy - h/2
+                        x_max = cx + w/2
+                        y_max = cy + h/2
+                        
+                        # Clip bounds
+                        x_min = max(0.0, x_min)
+                        y_min = max(0.0, y_min)
+                        x_max = min(1.0, x_max)
+                        y_max = min(1.0, y_max)
+                        
+                        # Recalculate cx, cy, w, h from clipped bounds
+                        w = x_max - x_min
+                        h = y_max - y_min
+                        cx = x_min + w/2
+                        cy = y_min + h/2
+                        
+                        # Validate
+                        if w > 0.001 and h > 0.001:  # Minimum size
                             boxes.append([cx, cy, w, h])
                             class_labels.append(class_id)
         # Apply transforms
