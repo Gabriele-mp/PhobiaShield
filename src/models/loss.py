@@ -3,15 +3,16 @@ Custom YOLO-style Loss Function
 
 Responsabilità Membro B: Model Architect
 
-OPTIMIZED VERSION with:
-- Focal Loss for class imbalance
-- GIoU Loss for better bbox regression
-- Configurable via flags: use_focal, use_giou
+CORRECTED VERSION:
+- Lambda weights balanced (obj=5.0, noobj=0.05)
+- Class weights balanced (Blood not over-penalized)
+- NO Focal Loss by default (causes low confidence)
+- NO GIoU by default (unstable)
 
-Loss = λ_coord * Localization Loss (GIoU or MSE)
-     + λ_obj * Objectness Loss (Focal or BCE, when object present)
-     + λ_noobj * Objectness Loss (Focal or BCE, when no object)
-     + λ_class * Classification Loss (Focal or CE, with class weights)
+Loss = λ_coord * Localization Loss 
+     + λ_obj * Objectness Loss (when object present)
+     + λ_noobj * Objectness Loss (when no object)
+     + λ_class * Classification Loss
 """
 
 import torch
@@ -27,16 +28,6 @@ class FocalLoss(nn.Module):
     Reference: "Focal Loss for Dense Object Detection" (Lin et al., 2017)
     
     FL(pt) = -alpha * (1 - pt)^gamma * log(pt)
-    
-    where:
-    - pt is the model's estimated probability for the correct class
-    - alpha balances positive/negative examples
-    - gamma focuses on hard examples (typical: 2.0)
-    
-    Args:
-        alpha: Weighting factor (default: 0.25)
-        gamma: Focusing parameter (default: 2.0)
-        reduction: 'none', 'mean', or 'sum'
     """
     
     def __init__(self, alpha: float = 0.25, gamma: float = 2.0, reduction: str = 'sum'):
@@ -46,23 +37,12 @@ class FocalLoss(nn.Module):
         self.reduction = reduction
     
     def forward(self, inputs: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
-        """
-        Args:
-            inputs: Predictions (logits or probabilities)
-            targets: Ground truth (same shape as inputs)
-        """
-        # BCE loss
         bce_loss = F.binary_cross_entropy_with_logits(
             inputs, targets, reduction='none'
         )
         
-        # Get probabilities
         pt = torch.exp(-bce_loss)
-        
-        # Focal weight: (1 - pt)^gamma
         focal_weight = (1 - pt) ** self.gamma
-        
-        # Final focal loss
         focal_loss = self.alpha * focal_weight * bce_loss
         
         if self.reduction == 'sum':
@@ -78,13 +58,6 @@ def compute_iou(box1: torch.Tensor, box2: torch.Tensor) -> torch.Tensor:
     Compute Intersection over Union (IoU) between two boxes.
     
     Boxes in format: [x, y, w, h] (center coordinates)
-    
-    Args:
-        box1: Tensor of shape (..., 4)
-        box2: Tensor of shape (..., 4)
-    
-    Returns:
-        iou: Tensor of shape (...)
     """
     # Convert to corner coordinates
     box1_x1 = box1[..., 0] - box1[..., 2] / 2
@@ -121,21 +94,6 @@ def giou_loss(pred_boxes: torch.Tensor, target_boxes: torch.Tensor) -> torch.Ten
     Compute Generalized IoU (GIoU) loss.
     
     Reference: "Generalized Intersection over Union" (Rezatofighi et al., 2019)
-    
-    GIoU = IoU - (C - U) / C
-    where:
-    - IoU: Intersection over Union
-    - C: smallest enclosing box area
-    - U: Union area
-    
-    GIoU Loss = 1 - GIoU
-    
-    Args:
-        pred_boxes: Predicted boxes [x, y, w, h] shape (..., 4)
-        target_boxes: Target boxes [x, y, w, h] shape (..., 4)
-    
-    Returns:
-        GIoU loss (scalar or tensor depending on input shape)
     """
     # Convert to corner coordinates
     pred_x1 = pred_boxes[..., 0] - pred_boxes[..., 2] / 2
@@ -175,7 +133,7 @@ def giou_loss(pred_boxes: torch.Tensor, target_boxes: torch.Tensor) -> torch.Ten
     # GIoU
     giou = iou - (enclose_area - union_area) / (enclose_area + 1e-6)
     
-    # GIoU loss (1 - GIoU)
+    # GIoU loss
     loss = 1 - giou
     
     return loss
@@ -185,21 +143,16 @@ class PhobiaLoss(nn.Module):
     """
     Custom YOLO-style loss for PhobiaNet.
     
-    OPTIMIZED VERSION with:
-    - Optional Focal Loss (use_focal=True)
-    - Optional GIoU Loss (use_giou=True)
-    - Class weighting support
-    
-    Components:
-    1. Localization Loss: GIoU (if use_giou) or MSE
-    2. Confidence Loss: Focal (if use_focal) or BCE
-    3. Classification Loss: Focal (if use_focal) or CE (with class weights)
+    CORRECTED VERSION with proper lambda weights:
+    - lambda_obj = 5.0 (increased from 1.0)
+    - lambda_noobj = 0.05 (decreased from 0.5)
+    - Balanced class weights (Blood not over-penalized)
     
     Args:
-        lambda_coord: Weight for localization loss
-        lambda_obj: Weight for objectness when object is present
-        lambda_noobj: Weight for objectness when no object is present
-        lambda_class: Weight for classification loss
+        lambda_coord: Weight for localization loss (default: 5.0)
+        lambda_obj: Weight for objectness when object is present (default: 5.0, CORRECTED!)
+        lambda_noobj: Weight for objectness when no object is present (default: 0.05, CORRECTED!)
+        lambda_class: Weight for classification loss (default: 1.0)
         grid_size: Grid size (S)
         num_boxes: Number of boxes per cell (B)
         num_classes: Number of classes (C)
@@ -213,15 +166,15 @@ class PhobiaLoss(nn.Module):
     def __init__(
         self,
         lambda_coord: float = 5.0,
-        lambda_obj: float = 1.0,
-        lambda_noobj: float = 0.5,
+        lambda_obj: float = 5.0,      # CORRECTED: was 1.0
+        lambda_noobj: float = 0.05,   # CORRECTED: was 0.5
         lambda_class: float = 1.0,
         grid_size: int = 13,
         num_boxes: int = 2,
         num_classes: int = 3,
         class_weights=None,
-        use_focal: bool = False,  # NEW!
-        use_giou: bool = False,   # NEW!
+        use_focal: bool = False,
+        use_giou: bool = False,
         focal_alpha: float = 0.25,
         focal_gamma: float = 2.0,
     ):
@@ -239,7 +192,7 @@ class PhobiaLoss(nn.Module):
         self.use_focal = use_focal
         self.use_giou = use_giou
         
-        # Class weights for imbalanced dataset
+        # CORRECTED: More balanced class weights
         if class_weights is None:
             self.class_weights = None
         else:
@@ -325,13 +278,13 @@ class PhobiaLoss(nn.Module):
                     pred_y = torch.sigmoid(pred_y)
                     
                     if self.use_giou:
-                        # NEW: GIoU Loss for bbox regression
+                        # GIoU Loss for bbox regression
                         pred_boxes = torch.stack([pred_x, pred_y, pred_w, pred_h], dim=-1)
                         target_boxes = torch.stack([target_x, target_y, target_w, target_h], dim=-1)
                         
                         coord_loss += giou_loss(pred_boxes, target_boxes).sum()
                     else:
-                        # Original: MSE Loss
+                        # MSE Loss (standard)
                         coord_loss += self.mse_loss(pred_x, target_x)
                         coord_loss += self.mse_loss(pred_y, target_y)
                         
@@ -350,10 +303,10 @@ class PhobiaLoss(nn.Module):
                     target_conf = targets[obj_idx, j, i, box_idx * 5 + 4]
                     
                     if self.use_focal:
-                        # NEW: Focal Loss for objectness
+                        # Focal Loss for objectness
                         conf_loss_obj += self.focal_loss_fn(pred_conf, target_conf)
                     else:
-                        # Original: BCE Loss
+                        # BCE Loss (standard)
                         pred_conf = torch.sigmoid(pred_conf)
                         conf_loss_obj += self.bce_loss(pred_conf, target_conf)
                     
@@ -367,25 +320,19 @@ class PhobiaLoss(nn.Module):
                     target_class_idx = torch.argmax(target_classes, dim=-1)
                     
                     if self.use_focal:
-                        # NEW: Focal Loss for classification
-                        # Apply softmax to get probabilities
+                        # Focal Loss for classification
                         pred_probs = F.softmax(pred_classes, dim=-1)
-                        
-                        # One-hot encode targets
                         target_one_hot = F.one_hot(target_class_idx, num_classes=C).float()
                         
-                        # Focal loss on each class
                         for c in range(C):
-                            # Apply class weight if provided
                             weight = class_weights[c] if class_weights is not None else 1.0
-                            
                             focal = self.focal_loss_fn(
                                 pred_classes[:, c],
                                 target_one_hot[:, c]
                             )
                             class_loss += weight * focal
                     else:
-                        # Original: Cross-Entropy with class weights
+                        # Cross-Entropy with class weights (standard)
                         if class_weights is not None:
                             class_loss += F.cross_entropy(
                                 pred_classes,
@@ -411,10 +358,10 @@ class PhobiaLoss(nn.Module):
                         target_conf = torch.zeros_like(pred_conf)
                         
                         if self.use_focal:
-                            # NEW: Focal Loss for no-object confidence
+                            # Focal Loss for no-object confidence
                             conf_loss_noobj += self.focal_loss_fn(pred_conf, target_conf)
                         else:
-                            # Original: BCE Loss
+                            # BCE Loss (standard)
                             pred_conf = torch.sigmoid(pred_conf)
                             conf_loss_noobj += self.bce_loss(pred_conf, target_conf)
         
@@ -465,96 +412,57 @@ if __name__ == "__main__":
     targets[0, 5, 5, num_boxes * 5 + 0] = 1.0  # Class 0 (clown)
     
     print("="*60)
-    print("Testing PhobiaLoss with Focal + GIoU")
+    print("Testing PhobiaLoss with CORRECTED Lambda Weights")
     print("="*60)
     
-    # Test 1: Original (BCE + MSE)
-    print("\n1. ORIGINAL (BCE + MSE):")
-    loss_fn_orig = PhobiaLoss(
+    # Test with CORRECTED lambda weights
+    print("\nCORRECTED (lambda_obj=5.0, lambda_noobj=0.05):")
+    class_weights = [2.0, 5.0, 3.0, 1.0, 10.0]  # More balanced
+    loss_fn_corrected = PhobiaLoss(
         lambda_coord=5.0,
-        lambda_obj=1.0,
-        lambda_noobj=0.5,
+        lambda_obj=5.0,      # CORRECTED: was 1.0
+        lambda_noobj=0.05,   # CORRECTED: was 0.5
         lambda_class=1.0,
         grid_size=grid_size,
         num_boxes=num_boxes,
         num_classes=num_classes,
-        class_weights=[3.0, 10.0, 8.0, 0.2, 30.0],
+        class_weights=class_weights,
         use_focal=False,
         use_giou=False
     )
     
-    total_loss, loss_dict = loss_fn_orig(predictions, targets)
-    print(f"   Total: {loss_dict['total_loss']:.2f}")
-    print(f"   Coord: {loss_dict['coord_loss']:.2f}, NoObj: {loss_dict['conf_loss_noobj']:.1f}")
+    total_loss, loss_dict = loss_fn_corrected(predictions, targets)
     
-    # Test 2: With Focal Loss
-    print("\n2. WITH FOCAL LOSS:")
-    loss_fn_focal = PhobiaLoss(
+    print(f"   Total Loss: {loss_dict['total_loss']:.2f}")
+    print(f"   Coord: {loss_dict['coord_loss']:.2f}")
+    print(f"   Obj: {loss_dict['conf_loss_obj']:.2f}")
+    print(f"   NoObj: {loss_dict['conf_loss_noobj']:.2f}")
+    print(f"   Class: {loss_dict['class_loss']:.2f}")
+    
+    # Compare with OLD (wrong) weights
+    print("\nOLD (lambda_obj=1.0, lambda_noobj=0.5) for comparison:")
+    loss_fn_old = PhobiaLoss(
         lambda_coord=5.0,
-        lambda_obj=1.0,
-        lambda_noobj=0.5,
+        lambda_obj=1.0,      # OLD
+        lambda_noobj=0.5,    # OLD
         lambda_class=1.0,
         grid_size=grid_size,
         num_boxes=num_boxes,
         num_classes=num_classes,
-        class_weights=[3.0, 10.0, 8.0, 0.2, 30.0],
-        use_focal=True,  # NEW!
-        use_giou=False,
-        focal_alpha=0.25,
-        focal_gamma=2.0
-    )
-    
-    total_loss_f, loss_dict_f = loss_fn_focal(predictions, targets)
-    print(f"   Total: {loss_dict_f['total_loss']:.2f}")
-    print(f"   Coord: {loss_dict_f['coord_loss']:.2f}, NoObj: {loss_dict_f['conf_loss_noobj']:.1f}")
-    
-    # Test 3: With GIoU Loss
-    print("\n3. WITH GIOU LOSS:")
-    loss_fn_giou = PhobiaLoss(
-        lambda_coord=5.0,
-        lambda_obj=1.0,
-        lambda_noobj=0.5,
-        lambda_class=1.0,
-        grid_size=grid_size,
-        num_boxes=num_boxes,
-        num_classes=num_classes,
-        class_weights=[3.0, 10.0, 8.0, 0.2, 30.0],
+        class_weights=class_weights,
         use_focal=False,
-        use_giou=True  # NEW!
+        use_giou=False
     )
     
-    total_loss_g, loss_dict_g = loss_fn_giou(predictions, targets)
-    print(f"   Total: {loss_dict_g['total_loss']:.2f}")
-    print(f"   Coord: {loss_dict_g['coord_loss']:.2f}, NoObj: {loss_dict_g['conf_loss_noobj']:.1f}")
+    total_loss_old, loss_dict_old = loss_fn_old(predictions, targets)
     
-    # Test 4: WITH BOTH (Focal + GIoU) - FULL OPTIMIZATION!
-    print("\n4. FULL OPTIMIZATION (Focal + GIoU):")
-    loss_fn_full = PhobiaLoss(
-        lambda_coord=5.0,
-        lambda_obj=1.0,
-        lambda_noobj=0.5,
-        lambda_class=1.0,
-        grid_size=grid_size,
-        num_boxes=num_boxes,
-        num_classes=num_classes,
-        class_weights=[3.0, 10.0, 8.0, 0.2, 30.0],
-        use_focal=True,   # NEW!
-        use_giou=True     # NEW!
-    )
+    print(f"   Total Loss: {loss_dict_old['total_loss']:.2f}")
+    print(f"   Obj: {loss_dict_old['conf_loss_obj']:.2f}")
+    print(f"   NoObj: {loss_dict_old['conf_loss_noobj']:.2f}")
     
-    total_loss_full, loss_dict_full = loss_fn_full(predictions, targets)
-    print(f"   Total: {loss_dict_full['total_loss']:.2f}")
-    print(f"   Coord: {loss_dict_full['coord_loss']:.2f}, NoObj: {loss_dict_full['conf_loss_noobj']:.1f}")
+    print(f"\n📊 Effect of lambda correction:")
+    print(f"   Obj weight increased: {5.0/1.0:.0f}x")
+    print(f"   NoObj weight decreased: {0.5/0.05:.0f}x")
+    print(f"   Ratio obj/noobj: {5.0/0.05:.0f}x (was {1.0/0.5:.0f}x)")
     
-    # Test GIoU function
-    print("\n📊 GIoU Test:")
-    box1 = torch.tensor([[0.5, 0.5, 0.4, 0.4]])
-    box2 = torch.tensor([[0.6, 0.6, 0.4, 0.4]])
-    
-    iou = compute_iou(box1, box2)
-    giou_l = giou_loss(box1, box2)
-    
-    print(f"   IoU:  {iou.item():.4f}")
-    print(f"   GIoU Loss: {giou_l.item():.4f}")
-    
-    print("\n✓ All loss functions working with Focal + GIoU!")
+    print("\n✓ Loss function with CORRECTED lambda weights!")
