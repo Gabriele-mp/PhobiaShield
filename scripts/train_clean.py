@@ -3,12 +3,12 @@ PhobiaShield - Simple Training Script
 The Architect Module
 
 OPTIMIZED VERSION with:
-- Early stopping (patience=5)
+- Early stopping (patience=10)
 - Weight decay (AdamW optimizer)
 - Augmentation enabled
 - Class weighting
-- Scheduler with min_lr
-- Reduced default epochs (30)
+- Cosine Annealing scheduler with Warmup (NEW!)
+- Focal Loss + GIoU Loss support (NEW!)
 """
 
 import torch
@@ -20,6 +20,7 @@ from tqdm import tqdm
 import sys
 from omegaconf import OmegaConf
 import argparse
+import math
 
 # Add project root
 sys.path.append(str(Path(__file__).parent.parent))
@@ -29,15 +30,91 @@ from src.models.loss import PhobiaLoss
 from src.data.phobia_dataset import PhobiaDataset
 
 
+class WarmupCosineScheduler:
+    """
+    Learning rate scheduler with linear warmup + cosine annealing.
+    
+    Warmup: Linear increase from 0 to base_lr over warmup_epochs
+    Cosine: Cosine annealing with warm restarts after warmup
+    
+    Args:
+        optimizer: PyTorch optimizer
+        warmup_epochs: Number of warmup epochs
+        max_epochs: Total number of epochs
+        base_lr: Base learning rate (max LR)
+        min_lr: Minimum learning rate
+        warmup_start_lr: Starting LR for warmup (default: 0)
+        cosine_t0: Period for cosine annealing restart (default: 10)
+        cosine_t_mult: Factor to increase T_0 after each restart (default: 2)
+    """
+    
+    def __init__(
+        self,
+        optimizer: optim.Optimizer,
+        warmup_epochs: int,
+        max_epochs: int,
+        base_lr: float,
+        min_lr: float = 1e-6,
+        warmup_start_lr: float = 0.0,
+        cosine_t0: int = 10,
+        cosine_t_mult: int = 2
+    ):
+        self.optimizer = optimizer
+        self.warmup_epochs = warmup_epochs
+        self.max_epochs = max_epochs
+        self.base_lr = base_lr
+        self.min_lr = min_lr
+        self.warmup_start_lr = warmup_start_lr
+        self.cosine_t0 = cosine_t0
+        self.cosine_t_mult = cosine_t_mult
+        
+        self.current_epoch = 0
+        
+        # Initialize Cosine scheduler (will be used after warmup)
+        self.cosine_scheduler = optim.lr_scheduler.CosineAnnealingWarmRestarts(
+            optimizer,
+            T_0=cosine_t0,
+            T_mult=cosine_t_mult,
+            eta_min=min_lr
+        )
+    
+    def step(self, epoch: int = None):
+        """Update learning rate."""
+        if epoch is not None:
+            self.current_epoch = epoch
+        
+        if self.current_epoch < self.warmup_epochs:
+            # Warmup phase: linear increase
+            lr = self.warmup_start_lr + (self.base_lr - self.warmup_start_lr) * (self.current_epoch / self.warmup_epochs)
+            
+            for param_group in self.optimizer.param_groups:
+                param_group['lr'] = lr
+        else:
+            # Cosine annealing phase
+            self.cosine_scheduler.step(self.current_epoch - self.warmup_epochs)
+        
+        self.current_epoch += 1
+    
+    def get_last_lr(self):
+        """Get current learning rate."""
+        return [param_group['lr'] for param_group in self.optimizer.param_groups]
+
+
 def train_phobiashield(
     data_root='data/phobiashield_final',
     model_config='cfg/model/tiny_yolo_5class.yaml',
-    epochs=30,  # REDUCED from 100
+    epochs=80,  # INCREASED from 30
     batch_size=8,
-    lr=0.0001,
+    lr=0.0001,  # Base LR (will be used after warmup)
     device='cuda',
-    resume=None,  # NEW: Resume support
-    early_stop_patience=5  # NEW: Early stopping
+    resume=None,
+    early_stop_patience=10,  # INCREASED from 5
+    use_focal=False,  # NEW: Use Focal Loss
+    use_giou=False,   # NEW: Use GIoU Loss
+    warmup_epochs=5,  # NEW: Warmup epochs
+    cosine_t0=10,     # NEW: Cosine restart period
+    use_residual=True,    # NEW: Use ResNet blocks
+    use_attention=True    # NEW: Use CBAM attention
 ):
     """
     Main training function with optimizations.
@@ -47,14 +124,20 @@ def train_phobiashield(
         model_config: Path to model config YAML
         epochs: Number of training epochs
         batch_size: Batch size
-        lr: Learning rate
+        lr: Base learning rate (after warmup)
         device: 'cuda' or 'cpu'
         resume: Path to checkpoint to resume from (optional)
         early_stop_patience: Stop if no improvement for N epochs
+        use_focal: Use Focal Loss instead of BCE/CE (NEW!)
+        use_giou: Use GIoU Loss instead of MSE (NEW!)
+        warmup_epochs: Number of warmup epochs (NEW!)
+        cosine_t0: Cosine annealing restart period (NEW!)
+        use_residual: Use ResNet blocks in model (NEW!)
+        use_attention: Use CBAM attention in model (NEW!)
     """
     
     print("="*60)
-    print("PhobiaShield Training - OPTIMIZED VERSION")
+    print("PhobiaShield Training - FULLY OPTIMIZED VERSION")
     print("The Architect")
     print("="*60)
     
@@ -76,21 +159,31 @@ def train_phobiashield(
         print("Using default: 5 classes")
         num_classes = 5
     
-    # Initialize model
+    # Initialize model with OPTIMIZATIONS
     print("\n🔧 Initializing model...")
+    print(f"   ResNet blocks: {'ON' if use_residual else 'OFF'}")
+    print(f"   CBAM attention: {'ON' if use_attention else 'OFF'}")
+    
     try:
-        model = PhobiaNet(model_cfg).to(device)
+        model = PhobiaNet(
+            model_cfg,
+            use_residual=use_residual,   # NEW!
+            use_attention=use_attention  # NEW!
+        ).to(device)
+        
         total_params = sum(p.numel() for p in model.parameters())
         print(f"✓ Model initialized: {total_params:,} parameters ({total_params*4/1e6:.2f} MB)")
     except Exception as e:
         print(f"❌ Model initialization failed: {e}")
         return
     
-    # Initialize loss with CLASS WEIGHTING
-    print("\n🔧 Initializing loss function with class weighting...")
-    class_weights = [1.0, 2.0, 1.7, 0.5, 10.0]  # Clown, Shark, Spider, Blood, Needle
+    # Initialize loss with OPTIMIZATIONS
+    print("\n🔧 Initializing loss function...")
+    print(f"   Focal Loss: {'ON' if use_focal else 'OFF'}")
+    print(f"   GIoU Loss: {'ON' if use_giou else 'OFF'}")
+    
+    class_weights = [3.0, 10.0, 8.0, 0.2, 30.0]  # Clown, Shark, Spider, Blood, Needle
     print(f"   Class weights: {class_weights}")
-    print(f"   (Blood penalized 0.5x, Needle amplified 10x)")
     
     loss_fn = PhobiaLoss(
         lambda_coord=5.0,
@@ -100,9 +193,11 @@ def train_phobiashield(
         grid_size=13,
         num_boxes=2,
         num_classes=num_classes,
-        class_weights=class_weights  # NEW!
+        class_weights=class_weights,
+        use_focal=use_focal,  # NEW!
+        use_giou=use_giou     # NEW!
     )
-    print("✓ Loss function initialized with class balancing")
+    print("✓ Loss function initialized")
     
     # Load datasets with AUGMENTATION ENABLED
     print("\n📦 Loading datasets...")
@@ -116,7 +211,7 @@ def train_phobiashield(
             grid_size=13,
             num_boxes=2,
             num_classes=num_classes,
-            augment=True  # ENABLED! (was False)
+            augment=True  # ENABLED
         )
         
         val_dataset = PhobiaDataset(
@@ -133,18 +228,18 @@ def train_phobiashield(
             train_dataset,
             batch_size=batch_size,
             shuffle=True,
-            num_workers=4,  # Increased from 2
+            num_workers=4,
             pin_memory=True if torch.cuda.is_available() else False,
-            collate_fn=PhobiaDataset.collate_fn  # Keep if defined
+            collate_fn=PhobiaDataset.collate_fn
         )
         
         val_loader = DataLoader(
             val_dataset,
             batch_size=batch_size,
             shuffle=False,
-            num_workers=4,  # Increased from 2
+            num_workers=4,
             pin_memory=True if torch.cuda.is_available() else False,
-            collate_fn=PhobiaDataset.collate_fn  # Keep if defined
+            collate_fn=PhobiaDataset.collate_fn
         )
         
         print(f"✓ Train: {len(train_dataset)} images (augmentation: ON)")
@@ -157,24 +252,30 @@ def train_phobiashield(
     
     # Initialize optimizer with WEIGHT DECAY (AdamW)
     print("\n⚙️  Initializing optimizer...")
-    optimizer = optim.AdamW(  # Changed from Adam to AdamW!
+    optimizer = optim.AdamW(
         model.parameters(),
         lr=lr,
         betas=(0.9, 0.999),
-        weight_decay=1e-4  # L2 regularization
+        weight_decay=1e-4
     )
-    print(f"✓ Optimizer: AdamW (lr={lr}, weight_decay=1e-4)")
+    print(f"✓ Optimizer: AdamW (base_lr={lr}, weight_decay=1e-4)")
     
-    # Scheduler with MINIMUM LR
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer,
-        mode='min',
-        factor=0.5,
-        patience=3,
-        min_lr=1e-6,  # NEW: Won't go below this!
-        verbose=False
+    # NEW: Warmup + Cosine Annealing Scheduler
+    print(f"\n📈 Initializing scheduler...")
+    print(f"   Warmup: {warmup_epochs} epochs (0 → {lr})")
+    print(f"   Cosine: T_0={cosine_t0}, T_mult=2, min_lr=1e-6")
+    
+    scheduler = WarmupCosineScheduler(
+        optimizer=optimizer,
+        warmup_epochs=warmup_epochs,
+        max_epochs=epochs,
+        base_lr=lr,
+        min_lr=1e-6,
+        warmup_start_lr=0.0,
+        cosine_t0=cosine_t0,
+        cosine_t_mult=2
     )
-    print(f"✓ Scheduler: ReduceLROnPlateau (min_lr=1e-6)")
+    print(f"✓ Scheduler: WarmupCosine (warmup={warmup_epochs})")
     
     # Create output directory
     output_dir = Path('outputs/checkpoints')
@@ -193,6 +294,9 @@ def train_phobiashield(
             start_epoch = checkpoint['epoch'] + 1
             best_val_loss = checkpoint.get('best_val_loss', checkpoint.get('val_loss', float('inf')))
             
+            # Update scheduler
+            scheduler.current_epoch = start_epoch
+            
             print(f"✓ Resumed from epoch {checkpoint['epoch']}")
             print(f"✓ Best val_loss so far: {best_val_loss:.2f}")
         except Exception as e:
@@ -210,6 +314,10 @@ def train_phobiashield(
     print(f"{'='*60}\n")
     
     for epoch in range(start_epoch, epochs):
+        # Update learning rate (warmup + cosine)
+        scheduler.step(epoch)
+        current_lr = scheduler.get_last_lr()[0]
+        
         # Train phase
         model.train()
         train_loss = 0
@@ -231,7 +339,7 @@ def train_phobiashield(
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=10.0)
             optimizer.step()
             
-            # Accumulate (SAME FORMAT AS BEFORE!)
+            # Accumulate
             train_loss += metrics['total_loss']
             train_metrics['coord'] += metrics['coord_loss']
             train_metrics['obj'] += metrics['conf_loss_obj']
@@ -241,8 +349,7 @@ def train_phobiashield(
             # Update progress
             pbar.set_postfix({
                 'loss': f"{metrics['total_loss']:.2f}",
-                'coord': f"{metrics['coord_loss']:.2f}",
-                'noobj': f"{metrics['conf_loss_noobj']:.1f}"
+                'lr': f"{current_lr:.6f}"
             })
         
         # Average train metrics
@@ -282,13 +389,14 @@ def train_phobiashield(
         print(f"\n📊 Epoch {epoch+1}/{epochs} Summary:")
         print(f"   Train Loss: {train_loss:.2f} (coord={train_metrics['coord']:.2f}, noobj={train_metrics['noobj']:.1f})")
         print(f"   Val Loss:   {val_loss:.2f} (coord={val_metrics['coord']:.2f}, noobj={val_metrics['noobj']:.1f})")
-        print(f"   LR: {optimizer.param_groups[0]['lr']:.6f}")
+        print(f"   LR: {current_lr:.6f}")
         
-        # Scheduler step
-        scheduler.step(val_loss)
+        # Indicate warmup phase
+        if epoch < warmup_epochs:
+            print(f"   🔥 Warmup phase ({epoch+1}/{warmup_epochs})")
         
-        # Save checkpoint every 5 epochs
-        if (epoch + 1) % 5 == 0:
+        # Save checkpoint every 10 epochs
+        if (epoch + 1) % 10 == 0:
             checkpoint = {
                 'epoch': epoch,
                 'model_state_dict': model.state_dict(),
@@ -317,7 +425,7 @@ def train_phobiashield(
             }
             torch.save(checkpoint, output_dir / 'best_model.pth')
             
-            if epoch > 0:  # Skip "improved by" message on first epoch
+            if epoch > 0:
                 print(f"   🏆 New best model! Val Loss: {val_loss:.2f} (improved by {improvement:.2f})\n")
             else:
                 print(f"   🏆 Best model saved (val_loss: {val_loss:.2f})\n")
@@ -348,15 +456,23 @@ def train_phobiashield(
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Train PhobiaShield - Optimized')
+    parser = argparse.ArgumentParser(description='Train PhobiaShield - Fully Optimized')
     parser.add_argument('--data', type=str, default='data/phobiashield_final', help='Dataset root')
     parser.add_argument('--config', type=str, default='cfg/model/tiny_yolo_5class.yaml', help='Model config')
-    parser.add_argument('--epochs', type=int, default=30, help='Number of epochs (reduced from 100)')
+    parser.add_argument('--epochs', type=int, default=80, help='Number of epochs (increased from 30)')
     parser.add_argument('--batch-size', type=int, default=8, help='Batch size')
-    parser.add_argument('--lr', type=float, default=0.0001, help='Learning rate')
+    parser.add_argument('--lr', type=float, default=0.0001, help='Base learning rate (after warmup)')
     parser.add_argument('--device', type=str, default='cuda', help='Device (cuda/cpu)')
     parser.add_argument('--resume', type=str, default=None, help='Resume from checkpoint')
-    parser.add_argument('--patience', type=int, default=5, help='Early stopping patience')
+    parser.add_argument('--patience', type=int, default=10, help='Early stopping patience')
+    
+    # NEW: Optimization flags
+    parser.add_argument('--use-focal', action='store_true', help='Use Focal Loss (default: False)')
+    parser.add_argument('--use-giou', action='store_true', help='Use GIoU Loss (default: False)')
+    parser.add_argument('--warmup-epochs', type=int, default=5, help='Warmup epochs (default: 5)')
+    parser.add_argument('--cosine-t0', type=int, default=10, help='Cosine restart period (default: 10)')
+    parser.add_argument('--no-residual', action='store_true', help='Disable ResNet blocks (default: enabled)')
+    parser.add_argument('--no-attention', action='store_true', help='Disable CBAM attention (default: enabled)')
     
     args = parser.parse_args()
     
@@ -368,5 +484,11 @@ if __name__ == "__main__":
         lr=args.lr,
         device=args.device,
         resume=args.resume,
-        early_stop_patience=args.patience
+        early_stop_patience=args.patience,
+        use_focal=args.use_focal,           # NEW!
+        use_giou=args.use_giou,             # NEW!
+        warmup_epochs=args.warmup_epochs,   # NEW!
+        cosine_t0=args.cosine_t0,           # NEW!
+        use_residual=not args.no_residual,  # NEW!
+        use_attention=not args.no_attention # NEW!
     )
