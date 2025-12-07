@@ -166,8 +166,8 @@ class PhobiaLoss(nn.Module):
     def __init__(
         self,
         lambda_coord: float = 5.0,
-        lambda_obj: float = 5.0,      # CORRECTED: was 1.0
-        lambda_noobj: float = 0.05,   # CORRECTED: was 0.5
+        lambda_obj: float = 10.0,      # CORRECTED: was 1.0
+        lambda_noobj: float = 0.01,   # CORRECTED: was 0.5
         lambda_class: float = 1.0,
         grid_size: int = 13,
         num_boxes: int = 2,

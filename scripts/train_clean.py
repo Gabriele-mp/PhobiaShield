@@ -155,8 +155,8 @@ def train_phobiashield(
     # CORRECTED: More balanced class weights
     class_weights = [2.0, 5.0, 3.0, 1.0, 10.0]  # Clown, Shark, Spider, Blood, Needle
     print(f"   Class weights: {class_weights}")
-    print(f"   Lambda obj: 5.0 (CORRECTED from 1.0)")
-    print(f"   Lambda noobj: 0.05 (CORRECTED from 0.5)")
+    print(f"   Lambda obj: 10.0 (CORRECTED from 5.0)")
+    print(f"   Lambda noobj: 0.01 (CORRECTED from 0.05)")
     
     loss_fn = PhobiaLoss(
         lambda_coord=5.0,
