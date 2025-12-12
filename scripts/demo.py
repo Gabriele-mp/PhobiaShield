@@ -14,6 +14,9 @@ def main():
     parser.add_argument("--conf", type=float, default=0.25, help="Confidence threshold")
     parser.add_argument("--no-debug", action="store_true", help="Disable bounding box visualization")
     
+    # --- FIX CRITICO: Aggiunto argomento per il file dei pesi ---
+    parser.add_argument("--checkpoint", type=str, default=None, help="Path to .pth model weights")
+    
     args = parser.parse_args()
     
     if not os.path.exists(args.video):
@@ -23,8 +26,10 @@ def main():
     print(f"PhobiaShield CLI Engine Starting...")
     print(f"   Input: {args.video}")
     print(f"   Confidence: {args.conf}")
+    print(f"   Weights: {args.checkpoint if args.checkpoint else 'RANDOM (Test Mode)'}")
     
-    processor = PhobiaVideoProcessor(output_dir=args.output)
+    # --- FIX CRITICO: Passiamo il checkpoint al processore ---
+    processor = PhobiaVideoProcessor(model_path=args.checkpoint, output_dir=args.output)
     
     try:
         processor.process_video(

@@ -75,7 +75,7 @@ architecture:
 # Output configuration
 output:
   # Classes: Spider, Snake, Blood
-  num_classes: 3
+  num_classes: 5
   
   # Output channels per grid cell: B * (5 + C)
   # 5 = [x, y, w, h, confidence]
