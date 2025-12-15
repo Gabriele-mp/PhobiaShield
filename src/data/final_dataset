@@ -1,0 +1,167 @@
+"""
+create_final_dataset.py
+-----------------------
+Script ufficiale per generare "PhobiaShield-Ultimate" (FINAL_DATASET).
+
+Workflow:
+1. Definisce le fonti (dataset originali + nuovi da Roboflow).
+2. Unisce tutto in una struttura YOLO unica.
+3. Rimeppa gli ID delle classi (es. 4 tipi di ragni -> 1 classe 'Spider').
+4. Bilancia la classe Blood (rimuove l'eccesso per evitare bias).
+
+Autori: Team PhobiaShield
+"""
+
+import os
+import shutil
+import random
+from pathlib import Path
+from tqdm import tqdm
+
+# ==============================================================================
+# ⚙️ CONFIGURAZIONE
+# ==============================================================================
+
+# Dove salvare il dataset finale
+OUTPUT_DIR = Path("data/FINAL_DATASET")
+
+# Mapping Classi: {ID_ORIGINALE: ID_DESTINAZIONE}
+# ID Target: 0: Clown, 1: Shark, 2: Spider, 3: Blood, 4: Needle
+
+DATASETS_CONFIG = {
+    # 1. Dataset Base (Esempio: quello che avevamo all'inizio)
+    "data/original_dataset/train": None, # None = mantieni ID originali
+
+    # 2. Nuovi Ragni (4 sottoclassi -> ID 2)
+    "data/raw/new_spiders/train": {0: 2, 1: 2, 2: 2, 3: 2},
+
+    # 3. Nuovi Squali (ID 0 -> ID 1)
+    "data/raw/new_sharks/train": {0: 1},
+
+    # 4. Nuovo Sangue (ID 0,1 -> ID 3)
+    "data/raw/new_blood/train": {0: 3, 1: 3},
+
+    # 5. Nuovi Aghi (ID 0 -> ID 4)
+    "data/raw/new_needles/train": {0: 4}
+}
+
+# Configurazione Bilanciamento (Dieta)
+DIET_CONFIG = {
+    "target_class_id": 3,      # ID del Sangue
+    "max_instances": 5000,     # Numero massimo desiderato
+    "prefix_filter": "new_blood" # Solo sui nuovi file scaricati
+}
+
+# ==============================================================================
+# 🔧 FUNZIONI CORE
+# ==============================================================================
+
+def setup_directories():
+    if OUTPUT_DIR.exists():
+        print(f"♻️  Rimuovo vecchia cartella {OUTPUT_DIR}...")
+        shutil.rmtree(OUTPUT_DIR)
+    
+    (OUTPUT_DIR / "images").mkdir(parents=True, exist_ok=True)
+    (OUTPUT_DIR / "labels").mkdir(parents=True, exist_ok=True)
+    print(f"✅ Creata struttura cartelle in {OUTPUT_DIR}")
+
+def process_dataset(src_path_str, mapping):
+    src = Path(src_path_str)
+    if not src.exists():
+        print(f"⚠️  SKIPPATO: Percorso non trovato -> {src}")
+        return
+
+    # Nome cartella padre come prefisso univoco (es. 'new_spiders')
+    # Se il path è 'data/raw/new_spiders/train', prende 'new_spiders'
+    prefix = src.parent.name 
+    
+    images = list(src.rglob("*.jpg")) + list(src.rglob("*.png")) + list(src.rglob("*.jpeg"))
+    print(f"📦 [{prefix}] Elaborazione {len(images)} immagini...")
+
+    for img_file in tqdm(images, desc=prefix):
+        # 1. Copia Immagine con prefisso
+        new_name = f"{prefix}_{img_file.name}"
+        shutil.copy(img_file, OUTPUT_DIR / "images" / new_name)
+
+        # 2. Gestione Label
+        lbl_file = None
+        # Cerca in sottocartella 'labels' o stessa cartella
+        try:
+            candidates = list(src.rglob(f"labels/{img_file.stem}.txt"))
+            if candidates: lbl_file = candidates[0]
+        except: pass
+        
+        if not lbl_file:
+            candidate = img_file.with_suffix(".txt")
+            if candidate.exists(): lbl_file = candidate
+
+        # 3. Scrittura e Remapping
+        if lbl_file:
+            new_lines = []
+            with open(lbl_file, 'r') as f:
+                for line in f:
+                    parts = line.strip().split()
+                    if len(parts) >= 5:
+                        cls_id = int(parts[0])
+                        
+                        # Logica di Mapping
+                        if mapping:
+                            if cls_id in mapping:
+                                new_id = mapping[cls_id]
+                                new_lines.append(f"{new_id} {' '.join(parts[1:])}\n")
+                        else:
+                            # Copia diretta (Dataset Originale)
+                            new_lines.append(line)
+
+            # Salva solo se ci sono annotazioni valide
+            if new_lines:
+                with open(OUTPUT_DIR / "labels" / f"{prefix}_{img_file.stem}.txt", 'w') as f_out:
+                    f_out.writelines(new_lines)
+
+def apply_diet():
+    """Rimuove l'eccesso di immagini per una classe specifica"""
+    print(f"\n🥗 Applicazione Dieta alla classe {DIET_CONFIG['target_class_id']}...")
+    
+    # Trova file che matchano il filtro (es. solo quelli scaricati da roboflow)
+    img_glob = list((OUTPUT_DIR / "images").glob(f"{DIET_CONFIG['prefix_filter']}_*"))
+    
+    current_count = len(img_glob)
+    target = DIET_CONFIG['max_instances']
+    
+    if current_count > target:
+        to_remove = current_count - target
+        print(f"🔪 Rimuovo {to_remove} immagini casuali di {DIET_CONFIG['prefix_filter']}...")
+        
+        random.shuffle(img_glob)
+        for file_to_del in tqdm(img_glob[:to_remove]):
+            # Elimina immagine
+            file_to_del.unlink()
+            # Elimina label
+            lbl_to_del = OUTPUT_DIR / "labels" / f"{file_to_del.stem}.txt"
+            if lbl_to_del.exists():
+                lbl_to_del.unlink()
+        print("✅ Dieta completata.")
+    else:
+        print("✅ Nessuna dieta necessaria (Count < Target).")
+
+# ==============================================================================
+# 🚀 MAIN
+# ==============================================================================
+if __name__ == "__main__":
+    print("🚀 PHOBIASHIELD DATASET GENERATOR")
+    print("=================================")
+    
+    setup_directories()
+    
+    # 1. Unione Dataset
+    for path, map_dict in DATASETS_CONFIG.items():
+        process_dataset(path, map_dict)
+        
+    # 2. Bilanciamento
+    apply_diet()
+    
+    # 3. Stats Finali
+    final_count = len(list((OUTPUT_DIR / "images").glob("*")))
+    print("\n🎉 GENERAZIONE COMPLETATA!")
+    print(f"📂 Dataset salvato in: {OUTPUT_DIR}")
+    print(f"📊 Totale Immagini: {final_count}")
