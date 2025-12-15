@@ -110,3 +110,27 @@ class FPNLoss(nn.Module):
         }
         
         return total_loss, loss_dict
+
+
+# Salva questo codice in un file chiamato 'loss_v37.py' 
+# oppure incollalo dentro loss_fpn.py alla fine
+
+from loss_fpn import FPNLoss
+
+def get_v37_healer_loss():
+    """
+    Configurazione 'The Healer' per eliminare le allucinazioni.
+    Gamma: 2.0 (Standard, non aggressiva come la 4.0)
+    Alpha: 0.25 (Standard)
+    """
+    return FPNLoss(
+        num_boxes=2,
+        num_classes=5, # Assicurati che questo combaci col tuo dataset
+        lambda_coord=5.0,
+        lambda_conf=1.0,
+        lambda_class=1.0,
+        use_focal_loss=True,
+        focal_alpha=0.25, 
+        focal_gamma=2.0,   # <--- QUI STA LA MAGIA: Ritorno a valori sani
+        class_weights=None 
+    )
