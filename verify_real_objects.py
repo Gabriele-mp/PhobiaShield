@@ -23,7 +23,7 @@ def test_all_classes_clean():
         4: "needle_test.jpg"
     }
     
-    weights_path = "outputs/checkpoints/FPN_epoch22_loss5.5143.pth"
+    weights_path = "outputs/checkpoints/FPN_epoch18_loss6.3037.pth"
     
     print(f"🧠 Caricamento Modello...")
     detector = PhobiaDetector(model_path=weights_path)

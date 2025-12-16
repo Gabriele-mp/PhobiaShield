@@ -1,278 +1,96 @@
-"""
-Non-Maximum Suppression (NMS)
-
-Responsabilità Membro C: Deployment & Demo Engineer
-
-NMS is used to remove duplicate detections and keep only the best bounding box
-for each object.
-"""
-
-import torch
 import numpy as np
-from typing import List, Dict, Tuple
 
+def compute_iou(box1, box2):
+    """Calcola IoU tra due box [cx, cy, w, h]"""
+    # Box 1
+    b1_x, b1_y, b1_w, b1_h = box1
+    x1_min = b1_x - b1_w / 2
+    y1_min = b1_y - b1_h / 2
+    x1_max = b1_x + b1_w / 2
+    y1_max = b1_y + b1_h / 2
 
-def compute_iou_boxes(box1: np.ndarray, box2: np.ndarray) -> float:
-    """
-    Compute IoU between two boxes.
-    
-    Args:
-        box1: [x, y, w, h] (center format)
-        box2: [x, y, w, h] (center format)
-    
-    Returns:
-        iou: Intersection over Union
-    """
-    # Convert to corner format
-    x1_min = box1[0] - box1[2] / 2
-    y1_min = box1[1] - box1[3] / 2
-    x1_max = box1[0] + box1[2] / 2
-    y1_max = box1[1] + box1[3] / 2
-    
-    x2_min = box2[0] - box2[2] / 2
-    y2_min = box2[1] - box2[3] / 2
-    x2_max = box2[0] + box2[2] / 2
-    y2_max = box2[1] + box2[3] / 2
-    
-    # Intersection
-    inter_x_min = max(x1_min, x2_min)
-    inter_y_min = max(y1_min, y2_min)
-    inter_x_max = min(x1_max, x2_max)
-    inter_y_max = min(y1_max, y2_max)
-    
-    inter_width = max(0, inter_x_max - inter_x_min)
-    inter_height = max(0, inter_y_max - inter_y_min)
-    inter_area = inter_width * inter_height
-    
-    # Union
-    box1_area = (x1_max - x1_min) * (y1_max - y1_min)
-    box2_area = (x2_max - x2_min) * (y2_max - y2_min)
+    # Box 2
+    b2_x, b2_y, b2_w, b2_h = box2
+    x2_min = b2_x - b2_w / 2
+    y2_min = b2_y - b2_h / 2
+    x2_max = b2_x + b2_w / 2
+    y2_max = b2_y + b2_h / 2
+
+    inter_xmin = max(x1_min, x2_min)
+    inter_ymin = max(y1_min, y2_min)
+    inter_xmax = min(x1_max, x2_max)
+    inter_ymax = min(y1_max, y2_max)
+
+    if inter_xmax < inter_xmin or inter_ymax < inter_ymin:
+        return 0.0
+
+    inter_area = (inter_xmax - inter_xmin) * (inter_ymax - inter_ymin)
+    box1_area = b1_w * b1_h
+    box2_area = b2_w * b2_h
+
     union_area = box1_area + box2_area - inter_area
-    
-    # IoU
-    iou = inter_area / (union_area + 1e-6)
-    
-    return iou
+    return inter_area / union_area if union_area > 0 else 0.0
 
-
-def nms(
-    detections: List[Dict],
-    iou_threshold: float = 0.5,
-    conf_threshold: float = 0.3
-) -> List[Dict]:
+def nms(predictions, iou_threshold=0.10, conf_threshold=None):
     """
-    Apply Non-Maximum Suppression to remove duplicate detections.
-    
-    Algorithm:
-    1. Filter detections by confidence threshold
-    2. Sort detections by confidence (descending)
-    3. For each detection:
-        - Keep it if it doesn't overlap too much with already kept detections
-        - Remove it otherwise
-    
-    Args:
-        detections: List of detection dicts with keys:
-                   - 'bbox': [x, y, w, h] (center format, normalized 0-1)
-                   - 'confidence': float
-                   - 'class_id': int
-        iou_threshold: IoU threshold for suppression
-        conf_threshold: Confidence threshold for filtering
-    
-    Returns:
-        filtered_detections: List of kept detections after NMS
+    Implementazione fedele di 'nms_cross_class' del compagno.
     """
-    if not detections:
+    if not predictions:
         return []
-    
-    # Filter by confidence threshold
-    detections = [d for d in detections if d["confidence"] >= conf_threshold]
-    
-    if not detections:
+
+    # 1. Filtro confidenza opzionale
+    if conf_threshold is not None:
+        predictions = [p for p in predictions if p['confidence'] >= conf_threshold]
+
+    if not predictions:
         return []
+
+    # --- FASE 1: Standard NMS (per classe) ---
+    keep_phase1 = []
+    classes = set(p['class_id'] for p in predictions)
+
+    for c in classes:
+        class_preds = [p for p in predictions if p['class_id'] == c]
+        class_preds.sort(key=lambda x: x['confidence'], reverse=True)
+
+        while class_preds:
+            best = class_preds.pop(0)
+            keep_phase1.append(best)
+            filtered = []
+            for p in class_preds:
+                if compute_iou(best['bbox'], p['bbox']) < iou_threshold:
+                    filtered.append(p)
+            class_preds = filtered
+
+    # --- FASE 2: Cross-Class Cleanup (V25 Logic) ---
+    # Ordina per AREA (w*h), i più grandi comandano
+    keep_phase1.sort(key=lambda x: x['bbox'][2] * x['bbox'][3], reverse=True)
     
-    # Sort by confidence (descending)
-    detections = sorted(detections, key=lambda x: x["confidence"], reverse=True)
+    final_keep = []
     
-    # Group detections by class
-    class_detections = {}
-    for det in detections:
-        class_id = det["class_id"]
-        if class_id not in class_detections:
-            class_detections[class_id] = []
-        class_detections[class_id].append(det)
-    
-    # Apply NMS per class
-    final_detections = []
-    
-    for class_id, class_dets in class_detections.items():
-        kept_dets = []
-        
-        while class_dets:
-            # Take the detection with highest confidence
-            best_det = class_dets.pop(0)
-            kept_dets.append(best_det)
+    # Definizioni del compagno
+    BIG_BOSS_IDS = [0, 1, 2] # Clown, Shark, Spider
+    NOISE_IDS = [3, 4]       # Blood, Needle
+
+    for box in keep_phase1:
+        suppressed = False
+        for big_box in final_keep:
+            iou = compute_iou(big_box['bbox'], box['bbox'])
             
-            # Remove detections that overlap too much with best_det
-            remaining_dets = []
-            for det in class_dets:
-                iou = compute_iou_boxes(
-                    np.array(best_det["bbox"]),
-                    np.array(det["bbox"])
-                )
-                
-                if iou < iou_threshold:
-                    # Keep this detection (low overlap)
-                    remaining_dets.append(det)
-                # else: suppress (high overlap)
+            is_big_boss = big_box['class_id'] in BIG_BOSS_IDS
+            is_noise = box['class_id'] in NOISE_IDS
             
-            class_dets = remaining_dets
-        
-        final_detections.extend(kept_dets)
-    
-    return final_detections
-
-
-def soft_nms(
-    detections: List[Dict],
-    iou_threshold: float = 0.5,
-    conf_threshold: float = 0.3,
-    sigma: float = 0.5,
-) -> List[Dict]:
-    """
-    Apply Soft-NMS: Instead of removing overlapping boxes, reduce their confidence.
-    
-    This is a gentler version of NMS that can help when objects are very close.
-    
-    Args:
-        detections: List of detection dicts
-        iou_threshold: IoU threshold for suppression
-        conf_threshold: Confidence threshold for filtering
-        sigma: Gaussian sigma for confidence decay
-    
-    Returns:
-        filtered_detections: List of kept detections after Soft-NMS
-    """
-    if not detections:
-        return []
-    
-    # Filter by confidence threshold
-    detections = [d for d in detections if d["confidence"] >= conf_threshold]
-    
-    if not detections:
-        return []
-    
-    # Make a copy to avoid modifying original
-    detections = [d.copy() for d in detections]
-    
-    # Group by class
-    class_detections = {}
-    for det in detections:
-        class_id = det["class_id"]
-        if class_id not in class_detections:
-            class_detections[class_id] = []
-        class_detections[class_id].append(det)
-    
-    final_detections = []
-    
-    for class_id, class_dets in class_detections.items():
-        # Sort by confidence
-        class_dets = sorted(class_dets, key=lambda x: x["confidence"], reverse=True)
-        
-        kept_dets = []
-        
-        while class_dets:
-            # Take best detection
-            best_det = class_dets.pop(0)
-            kept_dets.append(best_det)
+            # REGOLA 1: Il Boss mangia il Rumore se si toccano appena (>0.05)
+            if is_big_boss and is_noise and iou > 0.05:
+                suppressed = True
+                break
             
-            # Decay confidence of overlapping detections
-            for det in class_dets:
-                iou = compute_iou_boxes(
-                    np.array(best_det["bbox"]),
-                    np.array(det["bbox"])
-                )
-                
-                # Gaussian decay
-                det["confidence"] *= np.exp(-(iou ** 2) / sigma)
-            
-            # Re-sort by updated confidence
-            class_dets = sorted(class_dets, key=lambda x: x["confidence"], reverse=True)
-            
-            # Remove detections below threshold
-            class_dets = [d for d in class_dets if d["confidence"] >= conf_threshold]
+            # REGOLA 2: Se sono classi diverse ma si sovrappongono troppo (>0.2)
+            if big_box['class_id'] != box['class_id'] and iou > 0.2:
+                suppressed = True
+                break
         
-        final_detections.extend(kept_dets)
-    
-    return final_detections
+        if not suppressed:
+            final_keep.append(box)
 
-
-def batch_nms(
-    batch_detections: List[List[Dict]],
-    iou_threshold: float = 0.5,
-    conf_threshold: float = 0.3,
-    method: str = "standard"
-) -> List[List[Dict]]:
-    """
-    Apply NMS to a batch of detections.
-    
-    Args:
-        batch_detections: List of detection lists (one per image)
-        iou_threshold: IoU threshold
-        conf_threshold: Confidence threshold
-        method: "standard" or "soft"
-    
-    Returns:
-        filtered_batch: List of filtered detection lists
-    """
-    nms_fn = soft_nms if method == "soft" else nms
-    
-    filtered_batch = []
-    for detections in batch_detections:
-        filtered = nms_fn(detections, iou_threshold, conf_threshold)
-        filtered_batch.append(filtered)
-    
-    return filtered_batch
-
-
-if __name__ == "__main__":
-    # Test NMS
-    print("Testing Non-Maximum Suppression")
-    print("=" * 50)
-    
-    # Create dummy detections
-    detections = [
-        {"bbox": [0.5, 0.5, 0.2, 0.2], "confidence": 0.9, "class_id": 0},  # Spider
-        {"bbox": [0.52, 0.52, 0.21, 0.19], "confidence": 0.85, "class_id": 0},  # Overlapping spider
-        {"bbox": [0.3, 0.3, 0.15, 0.15], "confidence": 0.7, "class_id": 0},  # Another spider
-        {"bbox": [0.8, 0.8, 0.25, 0.25], "confidence": 0.95, "class_id": 1},  # Snake
-        {"bbox": [0.82, 0.82, 0.23, 0.23], "confidence": 0.6, "class_id": 1},  # Overlapping snake
-    ]
-    
-    print(f"Original detections: {len(detections)}")
-    for i, det in enumerate(detections):
-        print(f"  {i+1}. Class {det['class_id']}, Conf: {det['confidence']:.2f}, Box: {det['bbox']}")
-    
-    # Apply standard NMS
-    print("\nApplying Standard NMS (IoU=0.5, Conf=0.3):")
-    filtered = nms(detections, iou_threshold=0.5, conf_threshold=0.3)
-    print(f"Filtered detections: {len(filtered)}")
-    for i, det in enumerate(filtered):
-        print(f"  {i+1}. Class {det['class_id']}, Conf: {det['confidence']:.2f}, Box: {det['bbox']}")
-    
-    # Apply soft NMS
-    print("\nApplying Soft-NMS (IoU=0.5, Conf=0.3, Sigma=0.5):")
-    filtered_soft = soft_nms(detections, iou_threshold=0.5, conf_threshold=0.3, sigma=0.5)
-    print(f"Filtered detections: {len(filtered_soft)}")
-    for i, det in enumerate(filtered_soft):
-        print(f"  {i+1}. Class {det['class_id']}, Conf: {det['confidence']:.2f}, Box: {det['bbox']}")
-    
-    # Test IoU
-    print("\nTesting IoU computation:")
-    box1 = np.array([0.5, 0.5, 0.4, 0.4])
-    box2 = np.array([0.6, 0.6, 0.4, 0.4])
-    iou = compute_iou_boxes(box1, box2)
-    print(f"IoU between overlapping boxes: {iou:.4f}")
-    
-    box3 = np.array([0.2, 0.2, 0.3, 0.3])
-    iou2 = compute_iou_boxes(box1, box3)
-    print(f"IoU between non-overlapping boxes: {iou2:.4f}")
+    return final_keep
