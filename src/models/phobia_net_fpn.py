@@ -233,7 +233,7 @@ class PhobiaNetFPN(nn.Module):
         x = self.backbone['stage1'](x)       # (B, 64, 52, 52)
         
         # Need to get C3 (128 channels) - add extra block
-        c3 = ResidualBlock(64, 128, stride=1, leaky_slope=0.1)(x)  # (B, 128, 52, 52)
+        c3 = ResidualBlock(16, 128, stride=1, leaky_slope=0.1)(x)  # (B, 128, 52, 52)
         
         c4 = self.backbone['stage2'](c3)     # (B, 128, 26, 26) -> need 256
         c4 = ResidualBlock(128, 256, stride=1, leaky_slope=0.1)(c4)  # (B, 256, 26, 26)
