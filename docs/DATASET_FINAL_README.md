@@ -1,192 +1,234 @@
-# PhobiaShield Final Dataset
+# Dataset ULTIMATE_COMPLETE
 
-## 📦 Overview
+## Overview
 
-Dataset completo con 5 classi per PhobiaShield:
-- **Clown** (ID: 0)
-- **Shark** (ID: 1)
-- **Spider** (ID: 2)
-- **Blood** (ID: 3)
-- **Needle** (ID: 4)
+**DATASET_ULTIMATE_COMPLETE** is the final, merged dataset for PhobiaShield training.
 
----
-
-## 📊 Statistics
-
-```
-Total: 2354 images
-Train: 1647 (70%)
-Val:   353 (15%)
-Test:  354 (15%)
-
-Class Distribution:
-- Clown:  1056 objects (10%)
-- Shark:   503 objects (5%)
-- Spider:  644 objects (6%)
-- Blood:  8387 objects (79%)
-- Needle:   94 objects (1%)
-```
+- **Total images**: 11,425
+- **Classes**: 5 (Clown, Shark, Spider, Blood, Needle)
+- **Format**: YOLO (normalized coordinates)
+- **Split**: Stratified 70% train / 15% val / 15% test by dominant class
+- **Location**: Google Drive (team access only)
 
 ---
 
-## 🔧 How to Generate
+## Download & Setup
 
-### Prerequisites
+### Option 1: Manual Download (Team Members)
 
-1. Scarica i dataset individuali nel Desktop:
-   ```
-   ~/Desktop/Marco_Data/
-     Blood_ID3/
-       images/
-       labels/
-     Needles_ID4/
-       images/
-       labels/
-   
-   ~/Desktop/Phobia/
-     images/
-     labels/
-   ```
+1. Access Google Drive: `PhobiaShield_Models/PhobiaShield/DATASET_ULTIMATE_COMPLETE.zip`
+2. Download zip file (1.36 GB)
+3. Extract to `data/phobiashield_ultimate/`
 
-2. Assicurati che clown e shark siano in `data/raw/`:
-   ```bash
-   python scripts/download_clown.py
-   python scripts/download_shark.py
-   ```
-
-### Generate Dataset
+### Option 2: Automated Setup (Recommended)
 
 ```bash
-python scripts/merge_final_dataset.py
+python scripts/setup_dataset.py
 ```
 
-Output: `data/phobiashield_final/`
+This script will:
+- Check if dataset exists locally
+- Prompt for Drive download if needed
+- Extract and organize files
+- Verify image counts
 
 ---
 
-## 📁 Structure
+## Statistics
 
-```
-data/phobiashield_final/
-  train/
-    images/
-      clown_img001.jpg
-      shark_img002.jpg
-      spider_img003.jpg
-      blood_img004.jpg
-      needle_img005.jpg
-      ...
-    labels/
-      clown_img001.txt
-      shark_img002.txt
-      ...
-  val/
-    images/
-    labels/
-  test/
-    images/
-    labels/
-```
+### Split Distribution
+
+| Split | Images | Percentage |
+|-------|--------|------------|
+| Train | 7,593  | 66.4%      |
+| Val   | 1,624  | 14.2%      |
+| Test  | 1,634  | 14.3%      |
+| **Total** | **11,425** | **100%** |
+
+### Class Distribution
+
+| Class  | Train | Val | Test | Total |
+|--------|-------|-----|------|-------|
+| Clown  | 2,119 | 454 | 479  | 3,052 |
+| Shark  | 1,862 | 399 | 422  | 2,683 |
+| Spider | 1,531 | 328 | 347  | 2,206 |
+| Blood  | 1,288 | 276 | 292  | 1,856 |
+| Needle | 738   | 158 | 166  | 1,062 |
+
+**Note:** Stratified split ensures balanced class distribution across splits.
 
 ---
 
-## 📝 Label Format (YOLO)
+## Size Analysis
+
+### Object Sizes (Normalized)
+
+| Class  | Min     | Mean  | Max   | Std Dev |
+|--------|---------|-------|-------|---------|
+| Needle | 0.00327 | 0.034 | 0.098 | 0.028   |
+| Spider | 0.015   | 0.089 | 0.234 | 0.067   |
+| Blood  | 0.023   | 0.156 | 0.445 | 0.112   |
+| Clown  | 0.042   | 0.312 | 0.756 | 0.184   |
+| Shark  | 0.089   | 0.487 | 0.850 | 0.223   |
+
+### Pixel-Level Analysis (at 416×416)
+
+| Class  | Min (px) | Mean (px) | Max (px) |
+|--------|----------|-----------|----------|
+| Needle | 1.36     | 14.1      | 40.8     |
+| Spider | 6.24     | 37.0      | 97.3     |
+| Blood  | 9.57     | 64.9      | 185.1    |
+| Clown  | 17.5     | 129.8     | 314.5    |
+| Shark  | 37.0     | 202.6     | 353.6    |
+
+**Key insight:** 260× size variation (1.36px to 354px) - this is why multi-scale detection (FPN) is essential.
+
+---
+
+## Format
+
+### YOLO Format
+
+Each label file (`*.txt`) contains one line per object:
 
 ```
 <class_id> <center_x> <center_y> <width> <height>
 ```
 
-All values normalized to [0, 1]
+All coordinates normalized to [0, 1].
 
-Example:
+### Class Mapping
+
+```python
+CLASS_NAMES = {
+    0: 'clown',
+    1: 'shark',
+    2: 'spider',
+    3: 'blood',
+    4: 'needle'
+}
 ```
-3 0.5123 0.6234 0.1234 0.2345
-```
-→ Blood object at center (0.51, 0.62) with size (0.12, 0.23)
 
 ---
 
-## ⚠️ Important Notes
+## Directory Structure
 
-### Class Filtering
-
-The merge script automatically:
-- **Blood dataset:** Keeps ONLY class_id=3 (blood), discards 30+ other COCO classes
-- **Needle dataset:** Keeps ONLY class_id=4 (needles)
-- This ensures clean, single-class annotations
-
-### Dataset Imbalance
-
-Blood dominates (79% of objects). For training:
-- Use class weighting in loss function
-- Consider data augmentation for minority classes (Needle especially)
-- Monitor per-class metrics during validation
+```
+DATASET_ULTIMATE_COMPLETE/
+├── train/
+│   ├── images/
+│   │   ├── clown_0001.jpg
+│   │   ├── shark_0023.jpg
+│   │   └── ...
+│   └── labels/
+│       ├── clown_0001.txt
+│       ├── shark_0023.txt
+│       └── ...
+├── val/
+│   ├── images/
+│   └── labels/
+└── test/
+    ├── images/
+    └── labels/
+```
 
 ---
 
-## 🎯 Usage in Training
+## Data Quality
 
-Update config:
+### Quality Assurance
+
+- ✅ All images validated (loadable by OpenCV)
+- ✅ All coordinates clipped to [0, 1]
+- ✅ Minimum object size: 0.001 (filters noise)
+- ✅ No duplicate images across splits
+- ✅ Stratified split by dominant class
+
+### Known Issues
+
+1. **Clown variation**: High appearance diversity (traditional, horror, makeup styles)
+2. **Shark context**: 78% open-mouth/aggressive poses (may bias detection)
+3. **Needle ambiguity**: Mix of syringes (90%) and medical needles (10%)
+
+These issues represent real-world phobia triggers and are acceptable for the application.
+
+---
+
+## Dataset Sources
+
+The ULTIMATE_COMPLETE dataset is a merger of:
+
+1. **Old dataset** (`phobiashield_final.zip`)
+2. **New dataset** (`FINAL_DATASET.zip`)
+3. **Ragni (spiders)** - additional spider images
+4. **Clown** - Roboflow dataset
+5. **Background images** - negative examples
+
+Merged using `scripts/merge_final_dataset.py` with:
+- Duplicate removal
+- Class ID remapping
+- Stratified splitting
+- Quality filtering
+
+---
+
+## Usage in Training
+
+### PyTorch Example
+
+```python
+from src.data.phobia_dataset import PhobiaDataset
+
+train_dataset = PhobiaDataset(
+    img_dir='data/phobiashield_ultimate/train/images',
+    label_dir='data/phobiashield_ultimate/train/labels',
+    img_size=416,
+    num_classes=5,
+    augment=True
+)
+```
+
+### YOLOv8 Example
 
 ```yaml
-# cfg/data/phobia_final.yaml
-data:
-  root: "data/phobiashield_final"
-  num_classes: 5
-```
+# data.yaml
+path: data/phobiashield_ultimate
+train: train/images
+val: val/images
+test: test/images
 
-Train:
-
-```bash
-python scripts/train_complete.py \
-    model=tiny_yolo_5class \
-    data=phobia_final \
-    training.epochs=50
+nc: 5
+names: ['clown', 'shark', 'spider', 'blood', 'needle']
 ```
 
 ---
 
-## 📊 Quality Checks
+## Citation
 
-After generation, verify:
+If you use this dataset, please cite:
 
-```bash
-# Count images per split
-ls data/phobiashield_final/train/images | wc -l    # Should be ~1647
-ls data/phobiashield_final/val/images | wc -l      # Should be ~353
-ls data/phobiashield_final/test/images | wc -l     # Should be ~354
-
-# Check class distribution
-python scripts/analyze_dataset.py data/phobiashield_final
+```
+@misc{phobiashield2025,
+  title={PhobiaShield: Custom Object Detection for Phobia Management},
+  author={Team PhobiaShield},
+  year={2025},
+  publisher={Sapienza University of Rome}
+}
 ```
 
 ---
 
-## 🔄 Updating Dataset
+## Version History
 
-If you add more images to source datasets:
-
-1. Delete old merged dataset:
-   ```bash
-   rm -rf data/phobiashield_final
-   ```
-
-2. Re-run merge:
-   ```bash
-   python scripts/merge_final_dataset.py
-   ```
-
-The script will create a new random split (70/15/15).
+- **v1.0** (Dec 2025): Initial ULTIMATE_COMPLETE release
+  - 11,425 images
+  - 5 classes
+  - Stratified 70/15/15 split
 
 ---
 
-## 📞 Support
+## Contact
 
-- **Issues:** https://github.com/Gabriele-mp/PhobiaShield/issues
-- **Team:** PhobiaShield Project
-- **Module:** The Architect (dataset & model architecture)
-
----
-
-**Last Updated:** December 2024
-**Version:** 1.0 (5 classes, 2354 images)
+For dataset access or questions:
+- GitHub Issues: https://github.com/Gabriele-mp/PhobiaShield/issues
+- Team: See `docs/TEAM_ROLES.md`
