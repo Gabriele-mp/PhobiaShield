@@ -153,8 +153,7 @@ def train_phobiashield(
     print(f"   GIoU Loss: {'ON' if use_giou else 'OFF'}")
     
     # CORRECTED: More balanced class weights
-    class_weights = [2.0, 5.0, 3.0, 1.0, 10.0]  # Clown, Shark, Spider, Blood, Needle
-    print(f"   Class weights: {class_weights}")
+    class_weights = [4.76, 1.28, 3.70, 1.01, 1.39]  # OPTIMIZED from training    print(f"   Class weights: {class_weights}")
     print(f"   Lambda obj: 10.0 (CORRECTED from 5.0)")
     print(f"   Lambda noobj: 0.01 (CORRECTED from 0.05)")
     
