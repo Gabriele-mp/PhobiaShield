@@ -31,7 +31,7 @@ class PhobiaDataset(Dataset):
         img_size: int = 416,
         grid_size: int = 13,
         num_boxes: int = 2,
-        num_classes: int = 3,
+        num_classes: int = 5,
         augment: bool = False
     ):
         """
