@@ -13,8 +13,8 @@
 ```
 PhobiaShield Team
 ├── Gabriele (The Architect) - Model Architecture & Loss
-├── Member A (Data & Science Specialist) - Dataset & Report
-└── Member C (Deployment & Demo Engineer) - Inference & Demo
+├── Gianluca (Training Specialist) - Dataset & Report
+└── Marco (Deployment & Demo Engineer) - Inference & Demo
 ```
 
 ---
@@ -107,7 +107,7 @@ PhobiaShield Team
 
 ---
 
-## 👤 Member A - Data & Science Specialist
+## 👤 Gianluca - Training Specialist
 
 ### Primary Responsibilities
 
@@ -196,7 +196,7 @@ PhobiaShield Team
 
 ---
 
-## 👤 Member C - Deployment & Demo Engineer
+## 👤 Marco - Deployment & Demo Engineer
 
 ### Primary Responsibilities
 
