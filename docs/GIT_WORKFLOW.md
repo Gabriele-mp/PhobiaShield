@@ -1,619 +1,416 @@
-# 🔀 Git Workflow Guide - PhobiaShield
+# Git Workflow - PhobiaShield
 
-Guida completa per lavorare in team con Git e GitHub.
+## Branch Strategy
 
-## 📋 Indice
-
-1. [Setup Iniziale](#setup-iniziale)
-2. [Workflow Quotidiano](#workflow-quotidiano)
-3. [Branch Strategy](#branch-strategy)
-4. [Commit Messages](#commit-messages)
-5. [Pull Requests](#pull-requests)
-6. [Risoluzione Conflitti](#risoluzione-conflitti)
-7. [Best Practices](#best-practices)
+We follow a simplified Git workflow optimized for a 14-day sprint with 3 team members.
 
 ---
 
-## 1️⃣ Setup Iniziale
+## Branch Structure
 
-### Primo Setup (solo una volta)
-
-```bash
-# 1. Clone della repository
-git clone https://github.com/your-team/PhobiaShield.git
-cd PhobiaShield
-
-# 2. Configura il tuo nome e email
-git config --global user.name "Il Tuo Nome"
-git config --global user.email "tua-email@example.com"
-
-# 3. Crea il tuo ambiente virtuale
-conda create -n phobiashield python=3.10
-conda activate phobiashield
-
-# 4. Installa dipendenze
-pip install -r requirements.txt
-pip install -e .
-
-# 5. Configura W&B
-wandb login
 ```
+main (production)
+  ↑
+develop (integration)
+  ↑
+feature/* (individual work)
+```
+
+### Branch Descriptions
+
+- **`main`**: Production-ready code only
+  - Protected branch
+  - Requires pull request + review
+  - Only merge from `develop`
+
+- **`develop`**: Integration branch
+  - Latest working features
+  - Merge feature branches here
+  - Test before merging to main
+
+- **`feature/*`**: Individual feature branches
+  - Format: `feature/member-task-name`
+  - Examples:
+    - `feature/gabriele-fpn-architecture`
+    - `feature/memberA-dataset-preprocessing`
+    - `feature/memberC-demo-interface`
 
 ---
 
-## 2️⃣ Workflow Quotidiano
+## Workflow
 
-### Iniziare a Lavorare
+### 1. Starting New Work
 
 ```bash
-# 1. Assicurati di essere su main
-git checkout main
+# Update develop
+git checkout develop
+git pull origin develop
 
-# 2. Aggiorna main con le ultime modifiche
-git pull origin main
+# Create feature branch
+git checkout -b feature/your-name-task-name
 
-# 3. Crea il tuo branch per la feature
-# Format: feature/nome-descrittivo
-git checkout -b feature/data-augmentation
-
-# Oppure per Membro A:
-git checkout -b feature/data-pipeline
-
-# Oppure per Membro B:
-git checkout -b feature/model-architecture
-
-# Oppure per Membro C:
-git checkout -b feature/inference-demo
+# Example: Gabriele working on FPN
+git checkout -b feature/gabriele-fpn-loss-function
 ```
 
-### Durante il Lavoro
+### 2. Working on Feature
 
 ```bash
-# Controlla lo stato dei file modificati
-git status
+# Make changes
+# ... edit files ...
 
-# Aggiungi file specifici
-git add src/data/dataset.py
-git add src/data/augmentation.py
-
-# Oppure aggiungi tutto (usa con cautela!)
+# Stage and commit
 git add .
+git commit -m "Add Focal Loss implementation"
 
-# Fai il commit con messaggio descrittivo
-git commit -m "feat: implement PhobiaDataset class"
-
-# Push del tuo branch su GitHub
-git push origin feature/data-pipeline
-
-# Se è il primo push del branch
-git push -u origin feature/data-pipeline
+# Push to remote
+git push origin feature/gabriele-fpn-loss-function
 ```
 
-### Aggiornare il Tuo Branch con Main
+### 3. Merging Feature
+
+**Option A: Direct Merge (Small Changes)**
 
 ```bash
-# Mentre sei sul tuo branch
-git checkout feature/data-pipeline
+# Update develop
+git checkout develop
+git pull origin develop
 
-# Fetch delle ultime modifiche
-git fetch origin
+# Merge feature
+git merge feature/gabriele-fpn-loss-function
 
-# Merge di main nel tuo branch
-git merge origin/main
+# Push
+git push origin develop
 
-# Oppure usa rebase (più pulito, ma più avanzato)
-git rebase origin/main
-
-# Se ci sono conflitti, risolvili e poi:
-git add .
-git commit -m "merge: resolve conflicts with main"
-git push origin feature/data-pipeline
+# Delete feature branch
+git branch -d feature/gabriele-fpn-loss-function
+git push origin --delete feature/gabriele-fpn-loss-function
 ```
 
-### Completare il Lavoro
+**Option B: Pull Request (Recommended for Major Changes)**
 
-```bash
-# 1. Assicurati che tutto sia committato
-git status
-
-# 2. Push finale
-git push origin feature/data-pipeline
-
-# 3. Apri Pull Request su GitHub
-# Vai su: https://github.com/your-team/PhobiaShield/pulls
-# Click "New Pull Request"
-# Seleziona: base=main, compare=feature/data-pipeline
-# Aggiungi descrizione e reviewers
-```
+1. Push feature branch to GitHub
+2. Open Pull Request on GitHub
+3. Request review from team
+4. Merge after approval
+5. Delete feature branch
 
 ---
 
-## 3️⃣ Branch Strategy
+## Commit Message Guidelines
 
-### Branch Principale
+### Format
 
-- **`main`**: Branch principale, sempre stabile
-  - Contiene solo codice testato e funzionante
-  - Nessuno fa commit direttamente su main
-  - Aggiornato solo tramite Pull Request
+```
+<type>(<scope>): <subject>
 
-### Branch per Membro
+<body>
 
-Ogni membro ha il suo branch principale per la sua area:
-
-- **`feature/data-pipeline`**: Membro A (Data Specialist)
-- **`feature/model-architecture`**: Membro B (Model Architect)
-- **`feature/inference-demo`**: Membro C (Deployment Engineer)
-
-### Branch per Sub-Task
-
-Opzionalmente, creare branch più specifici:
-
-```bash
-# Da feature/data-pipeline
-git checkout feature/data-pipeline
-git checkout -b feature/data-augmentation-advanced
-
-# Da feature/model-architecture
-git checkout feature/model-architecture
-git checkout -b feature/loss-function-debug
-
-# Da feature/inference-demo
-git checkout feature/inference-demo
-git checkout -b feature/streamlit-ui
+<footer>
 ```
 
----
+### Types
 
-## 4️⃣ Commit Messages
-
-### Convention: Conventional Commits
-
-Format: `<type>: <description>`
-
-#### Types
-
-- **feat**: Nuova feature
-  ```bash
-  git commit -m "feat: add PhobiaDataset class"
-  git commit -m "feat: implement custom loss function"
-  git commit -m "feat: add NMS algorithm"
-  ```
-
+- **feat**: New feature
 - **fix**: Bug fix
-  ```bash
-  git commit -m "fix: correct bbox coordinate conversion"
-  git commit -m "fix: resolve dimension mismatch in forward pass"
-  ```
+- **docs**: Documentation only
+- **style**: Code formatting (no logic change)
+- **refactor**: Code restructuring (no feature change)
+- **test**: Adding tests
+- **chore**: Maintenance tasks
 
-- **docs**: Documentazione
-  ```bash
-  git commit -m "docs: add docstrings to dataset class"
-  git commit -m "docs: update README with installation steps"
-  ```
+### Examples
 
-- **refactor**: Refactoring codice
-  ```bash
-  git commit -m "refactor: simplify data loading logic"
-  git commit -m "refactor: extract NMS to separate function"
-  ```
+**Good commits:**
+```bash
+git commit -m "feat(fpn): Add multi-scale detection heads"
+git commit -m "fix(dataset): Correct class ID mapping for needle"
+git commit -m "docs(readme): Update installation instructions"
+```
 
-- **test**: Aggiunta test
-  ```bash
-  git commit -m "test: add unit tests for loss function"
-  ```
+**Bad commits:**
+```bash
+git commit -m "update"
+git commit -m "fix stuff"
+git commit -m "asdf"
+```
 
-- **chore**: Maintenance
-  ```bash
-  git commit -m "chore: update requirements.txt"
-  git commit -m "chore: add .gitignore rules"
-  ```
+### Scope Guidelines
 
-#### Multi-line Commits (per cambiamenti complessi)
+- **model**: Neural network architecture
+- **loss**: Loss function
+- **dataset**: Data loading/processing
+- **training**: Training loop/optimization
+- **eval**: Evaluation/metrics
+- **demo**: Demo interface
+- **docs**: Documentation
+
+---
+
+## Collaboration Rules
+
+### Before Starting Work
+
+1. **Check existing branches**: `git branch -a`
+2. **Coordinate with team**: Avoid duplicate work
+3. **Pull latest develop**: Always start from updated code
+
+### During Work
+
+1. **Commit frequently**: Small, focused commits
+2. **Push daily**: Backup your work
+3. **Sync with develop**: Merge develop into feature if needed
 
 ```bash
-git commit -m "feat: implement data augmentation pipeline
-
-- Add horizontal flip with 50% probability
-- Add brightness/contrast adjustment
-- Add Gaussian noise and blur
-- Integrate with PhobiaDataset
-- Add config file for augmentation parameters"
+# In your feature branch
+git fetch origin
+git merge origin/develop
 ```
 
----
-
-## 5️⃣ Pull Requests
-
-### Creare una Pull Request
-
-1. **Push del tuo branch**
-   ```bash
-   git push origin feature/data-pipeline
-   ```
-
-2. **Su GitHub**
-   - Vai a: https://github.com/your-team/PhobiaShield
-   - Click "Pull requests" → "New pull request"
-   - Base: `main`, Compare: `feature/data-pipeline`
-   - Click "Create pull request"
-
-3. **Compila la PR**
-   ```markdown
-   ## Description
-   Implements PhobiaDataset class with YOLO format support
-   
-   ## Changes
-   - ✅ Created PhobiaDataset class in src/data/dataset.py
-   - ✅ Added YOLO annotation parsing
-   - ✅ Integrated data augmentation
-   - ✅ Added unit tests
-   
-   ## Testing
-   - [x] Tested with dummy data
-   - [x] Verified with actual COCO subset
-   - [ ] Performance benchmarking (TODO)
-   
-   ## Related Issues
-   Closes #1
-   ```
-
-4. **Assegna Reviewers**
-   - Assegna gli altri membri del team come reviewers
-   - Aspetta l'approvazione prima del merge
-
-### Processo di Review
-
-#### Per il Reviewer:
-
-1. **Leggi il codice**
-   - Vai su "Files changed"
-   - Leggi i cambiamenti
-   - Aggiungi commenti dove necessario
-
-2. **Testa localmente** (opzionale ma consigliato)
-   ```bash
-   git fetch origin
-   git checkout feature/data-pipeline
-   python -m pytest  # Run tests
-   ```
-
-3. **Approva o Request Changes**
-   - Approva: "Looks good to me! (LGTM)"
-   - Request changes: Spiega cosa deve essere modificato
-
-#### Per l'Autore:
-
-1. **Rispondi ai commenti**
-2. **Fai le modifiche richieste**
-3. **Push degli aggiornamenti**
-   ```bash
-   git add .
-   git commit -m "fix: address review comments"
-   git push origin feature/data-pipeline
-   ```
-
-### Merge della PR
-
-**Opzione 1: Merge Commit** (consigliato per team)
-```
-feature/data-pipeline → main
-(mantiene tutta la history)
-```
-
-**Opzione 2: Squash and Merge**
-```
-Combina tutti i commit in uno solo
-(history più pulita)
-```
-
-**Opzione 3: Rebase and Merge**
-```
-Applica i commit uno per uno su main
-(history lineare)
-```
-
-Per il nostro progetto, usa **Merge Commit**.
-
----
-
-## 6️⃣ Risoluzione Conflitti
-
-### Scenario: Conflict durante Merge
+### Resolving Conflicts
 
 ```bash
-# Situazione: stai mergendo main nel tuo branch
-git merge origin/main
+# If merge conflict occurs
+git status  # See conflicted files
 
-# Output:
-# Auto-merging src/data/dataset.py
-# CONFLICT (content): Merge conflict in src/data/dataset.py
-# Automatic merge failed; fix conflicts and then commit the result.
+# Edit files to resolve conflicts
+# Look for <<<<<<< HEAD markers
+
+# After resolving
+git add <resolved-files>
+git commit -m "Merge develop into feature/..."
 ```
 
-### Risoluzione
+---
 
-1. **Apri i file in conflitto**
-   ```python
-   # src/data/dataset.py
-   
-   <<<<<<< HEAD (current change - il tuo codice)
-   def load_data(self):
-       return self.data
-   =======
-   def load_data(self, normalize=True):
-       return self.normalize(self.data) if normalize else self.data
-   >>>>>>> origin/main (incoming change - da main)
-   ```
+## Role-Specific Workflows
 
-2. **Scegli cosa tenere**
-   ```python
-   # Opzione A: Tieni il tuo codice
-   def load_data(self):
-       return self.data
-   
-   # Opzione B: Tieni il codice da main
-   def load_data(self, normalize=True):
-       return self.normalize(self.data) if normalize else self.data
-   
-   # Opzione C: Combina entrambi (spesso la migliore)
-   def load_data(self, normalize=True):
-       # Tua logica + logica da main
-       data = self.data
-       return self.normalize(data) if normalize else data
-   ```
+### Gabriele (Model Architect)
 
-3. **Rimuovi i markers di conflitto**
-   ```python
-   # Rimuovi: <<<<<<< HEAD, =======, >>>>>>> origin/main
-   ```
+**Typical branches:**
+- `feature/gabriele-fpn-architecture`
+- `feature/gabriele-loss-function`
+- `feature/gabriele-nms-implementation`
 
-4. **Stage, commit, push**
-   ```bash
-   git add src/data/dataset.py
-   git commit -m "merge: resolve conflicts in dataset.py"
-   git push origin feature/data-pipeline
-   ```
+**Files to modify:**
+- `src/models/phobia_net_fpn.py`
+- `src/models/loss_fpn.py`
+- `src/models/nms.py`
 
-### Prevenire Conflitti
+### Member A (Data Specialist)
 
-1. **Pull frequentemente**
-   ```bash
-   # Ogni mattina prima di iniziare
-   git checkout main
-   git pull origin main
-   git checkout feature/data-pipeline
-   git merge main
-   ```
+**Typical branches:**
+- `feature/memberA-dataset-merge`
+- `feature/memberA-data-augmentation`
+- `feature/memberA-statistics-analysis`
 
-2. **Comunica con il team**
-   - "Sto lavorando su dataset.py"
-   - "Non modificate loss.py, ci sto lavorando io"
+**Files to modify:**
+- `src/data/phobia_dataset.py`
+- `scripts/merge_final_dataset.py`
+- `docs/DATASET_FINAL_README.md`
 
-3. **Lavora su file diversi**
-   - Membro A: `src/data/`
-   - Membro B: `src/models/`
-   - Membro C: `src/inference/`
+### Member C (Demo Engineer)
+
+**Typical branches:**
+- `feature/memberC-inference-pipeline`
+- `feature/memberC-video-processing`
+- `feature/memberC-streamlit-interface`
+
+**Files to modify:**
+- `src/inference/predictor.py`
+- `src/demo/video_processor.py`
+- `demo_app.py`
 
 ---
 
-## 7️⃣ Best Practices
+## Common Scenarios
 
-### DO's ✅
-
-- ✅ **Commit piccoli e frequenti**
-  ```bash
-  git commit -m "feat: add bbox validation"
-  git commit -m "feat: add bbox clipping"
-  # Meglio di un singolo commit enorme
-  ```
-
-- ✅ **Pull prima di push**
-  ```bash
-  git pull origin main  # Prima
-  git push origin feature/data-pipeline  # Poi
-  ```
-
-- ✅ **Branch descrittivi**
-  ```bash
-  feature/loss-function-implementation  # ✅ Good
-  fix-stuff  # ❌ Bad
-  ```
-
-- ✅ **Testa prima di committare**
-  ```bash
-  python -m pytest
-  python src/data/dataset.py  # Test manuale
-  git commit -m "feat: add dataset class"
-  ```
-
-- ✅ **Clear nei notebook prima di committare**
-  ```bash
-  # In Jupyter: Kernel → Restart & Clear Output
-  git add notebooks/training_colab.ipynb
-  git commit -m "docs: add training notebook"
-  ```
-
-### DON'Ts ❌
-
-- ❌ **NON committare file pesanti**
-  ```bash
-  # NO:
-  git add data/images/*.jpg  # ❌
-  git add outputs/checkpoints/*.pth  # ❌
-  git add *.mp4  # ❌
-  
-  # Usa .gitignore invece!
-  ```
-
-- ❌ **NON committare credenziali**
-  ```bash
-  # NO:
-  wandb_api_key = "abc123"  # ❌
-  
-  # USA:
-  import os
-  wandb_api_key = os.getenv("WANDB_API_KEY")  # ✅
-  ```
-
-- ❌ **NON fare commit direttamente su main**
-  ```bash
-  git checkout main
-  git add .
-  git commit -m "stuff"  # ❌ MAI!
-  ```
-
-- ❌ **NON pushare codice che non compila**
-  ```bash
-  # Test prima!
-  python src/models/phobia_net.py  # Deve funzionare
-  git push  # Solo se funziona
-  ```
-
----
-
-## 🆘 Comandi di Emergenza
-
-### Annullare l'ultimo commit (non ancora pushato)
+### Scenario 1: Quick Fix on Main
 
 ```bash
-# Annulla commit ma mantieni i cambiamenti
+# Create hotfix branch from main
+git checkout main
+git pull origin main
+git checkout -b hotfix/fix-critical-bug
+
+# Make fix
+# ... edit ...
+
+# Commit and push
+git commit -am "fix: Correct class count in config"
+git push origin hotfix/fix-critical-bug
+
+# Merge to main AND develop
+git checkout main
+git merge hotfix/fix-critical-bug
+git push origin main
+
+git checkout develop
+git merge hotfix/fix-critical-bug
+git push origin develop
+
+# Delete hotfix branch
+git branch -d hotfix/fix-critical-bug
+```
+
+### Scenario 2: Sharing Work in Progress
+
+```bash
+# In your feature branch
+git add .
+git commit -m "WIP: Implementing P3 scale detection"
+git push origin feature/gabriele-fpn-p3
+
+# Share with team
+# Teammate can check out:
+git fetch origin
+git checkout -b gabriele-fpn-p3 origin/feature/gabriele-fpn-p3
+```
+
+### Scenario 3: Updating Feature from Develop
+
+```bash
+# Someone merged important changes to develop
+# Update your feature branch
+
+git checkout feature/your-branch
+git fetch origin
+git merge origin/develop
+
+# Or use rebase for cleaner history (advanced)
+git rebase origin/develop
+```
+
+---
+
+## Emergency Procedures
+
+### Undo Last Commit (Not Pushed)
+
+```bash
+# Keep changes, undo commit
 git reset --soft HEAD~1
 
-# Annulla commit E cambiamenti (ATTENZIONE!)
+# Discard changes completely
 git reset --hard HEAD~1
 ```
 
-### Annullare modifiche non committate
+### Undo Pushed Commit
 
 ```bash
-# Singolo file
-git checkout -- src/data/dataset.py
+# Create revert commit (safe)
+git revert HEAD
+git push origin develop
+```
 
-# Tutti i file
+### Recover Deleted Branch
+
+```bash
+# Find commit hash
+git reflog
+
+# Recreate branch
+git checkout -b feature/recovered-branch <commit-hash>
+```
+
+### Discard All Local Changes
+
+```bash
+# Nuclear option - use with caution!
 git reset --hard HEAD
-```
-
-### Tornare a un commit precedente
-
-```bash
-# Vedi la history
-git log --oneline
-
-# Torna a un commit specifico
-git checkout abc123f  # Hash del commit
-
-# Crea un branch da quel punto
-git checkout -b fix-from-old-commit
-```
-
-### Salvare lavoro temporaneo (stash)
-
-```bash
-# Salva modifiche non committate
-git stash
-
-# Cambia branch o fai altro lavoro
-git checkout other-branch
-
-# Recupera le modifiche salvate
-git checkout your-branch
-git stash pop
+git clean -fd
 ```
 
 ---
 
-## 📞 Cheat Sheet Rapido
+## Best Practices
 
-```bash
-# Setup
-git clone <url>
-git config --global user.name "Nome"
-git config --global user.email "email"
+### DO ✅
 
-# Workflow base
-git checkout main
-git pull origin main
-git checkout -b feature/my-feature
-# ... lavora ...
-git add .
-git commit -m "feat: description"
-git push origin feature/my-feature
+1. **Pull before push**: Always sync before pushing
+2. **Small commits**: One logical change per commit
+3. **Test before merge**: Run tests locally
+4. **Write meaningful messages**: Explain WHY, not just WHAT
+5. **Delete merged branches**: Keep repo clean
 
-# Update branch
-git fetch origin
-git merge origin/main
+### DON'T ❌
 
-# Risoluzione conflitti
-# 1. Apri file, risolvi conflitti
-# 2. git add <file>
-# 3. git commit -m "merge: resolve conflicts"
-# 4. git push
+1. **Don't commit directly to main**: Always use feature branches
+2. **Don't commit secrets**: No API keys, passwords
+3. **Don't commit large files**: Use Git LFS or Drive for datasets
+4. **Don't force push to shared branches**: `git push -f` breaks others' work
+5. **Don't commit commented code**: Delete instead of commenting
 
-# Utility
-git status
-git log --oneline
-git branch -a
-git diff
+---
+
+## .gitignore
+
+Our `.gitignore` excludes:
+
+```gitignore
+# Python
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+
+# Data
+data/
+*.zip
+*.tar.gz
+
+# Models
+outputs/checkpoints/
+*.pth
+*.pt
+
+# IDE
+.vscode/
+.idea/
+
+# Experiments
+runs/
+logs/
 ```
 
 ---
 
-## 🎯 Workflow per Membri Specifici
-
-### Membro A (Data Specialist)
+## Cheat Sheet
 
 ```bash
-# Setup
-git checkout -b feature/data-pipeline
+# Common commands
+git status                          # Check status
+git branch                          # List branches
+git checkout -b feature/name        # Create branch
+git add .                           # Stage all changes
+git commit -m "message"             # Commit
+git push origin feature/name        # Push branch
+git pull origin develop             # Pull develop
+git merge develop                   # Merge develop
+git branch -d feature/name          # Delete local branch
+git push origin --delete feature/name  # Delete remote branch
 
-# Lavoro tipico
-# - Modifica: src/data/dataset.py
-# - Modifica: src/data/augmentation.py
-# - Modifica: cfg/data/*.yaml
+# Undo/Fix
+git reset --soft HEAD~1             # Undo last commit (keep changes)
+git revert HEAD                     # Revert last commit (safe)
+git stash                           # Save changes temporarily
+git stash pop                       # Restore stashed changes
 
-git add src/data/
-git add cfg/data/
-git commit -m "feat: implement data pipeline"
-git push origin feature/data-pipeline
-```
-
-### Membro B (Model Architect)
-
-```bash
-# Setup
-git checkout -b feature/model-architecture
-
-# Lavoro tipico
-# - Modifica: src/models/phobia_net.py
-# - Modifica: src/models/loss.py
-# - Modifica: cfg/model/*.yaml
-
-git add src/models/
-git add cfg/model/
-git commit -m "feat: implement loss function"
-git push origin feature/model-architecture
-```
-
-### Membro C (Deployment Engineer)
-
-```bash
-# Setup
-git checkout -b feature/inference-demo
-
-# Lavoro tipico
-# - Modifica: src/inference/nms.py
-# - Modifica: src/inference/video_processor.py
-# - Modifica: app/streamlit_app.py
-
-git add src/inference/
-git add app/
-git commit -m "feat: implement video processing"
-git push origin feature/inference-demo
+# Info
+git log --oneline                   # View history
+git diff                            # View changes
+git remote -v                       # View remotes
 ```
 
 ---
 
-**Buon lavoro! 🚀**
+## Resources
 
-Per domande, chiedete agli altri membri del team o consultate la [documentazione Git ufficiale](https://git-scm.com/doc).
+- Official Git docs: https://git-scm.com/doc
+- Git branching model: https://nvie.com/posts/a-successful-git-branching-model/
+- Conventional commits: https://www.conventionalcommits.org/
+
+---
+
+## Team Contacts
+
+See `docs/TEAM_ROLES.md` for team member responsibilities and contact info.
