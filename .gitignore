@@ -1,10 +1,38 @@
-/data/
+# System & Python Junk
 __pycache__/
+*.py[cod]
 *.pyc
 .DS_Store
-.env
+Thumbs.db
 *.egg-info/
-outputs/
-wandb/
+
+# Environments (Double Protection)
+.venv/
+venv/
+env/
+.conda/
+
+# IDE
+.vscode/
+
+# DATA (Total Protection)
+data_workspace/
+data/
+
+# LARGE FILES
+*.pth
+*.mp4
 *.zip
-__pycache__/
+outputs/
+
+# Secrets & Logs
+wandb/
+.env
+
+# Ignore personal files and outputs
+full_project.txt
+*.jpg
+check_system.py
+context_builder.py
+inspect_weights.py
+verify_math_symmetry.py
