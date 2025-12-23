@@ -285,6 +285,9 @@ model = YOLO('results/yolov8s/train/weights/best.pt')
 ```
 
 ---
+## DEMO VIDEO 
+
+https://drive.google.com/file/d/1zrMESlpjXHSKzR-COhsbEwyElNnBJ-5C/view?usp=share_link
 
 ## Contact
 
